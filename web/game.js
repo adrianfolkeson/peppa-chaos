@@ -19,6 +19,7 @@ ctx.imageSmoothingEnabled = false
 function resize() {
   canvas.width  = canvas.offsetWidth  || window.innerWidth
   canvas.height = canvas.offsetHeight || window.innerHeight
+  ctx.imageSmoothingEnabled = false   // re-apply after every resize (resizing resets context)
 }
 window.addEventListener('resize', resize)
 resize()
