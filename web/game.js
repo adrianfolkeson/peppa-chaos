@@ -371,7 +371,7 @@ function initGame(levelIdx) {
     nextRandomEvent: 8,
     nearItem: null,
     scorePopups: [],
-    spawnTimer:  3,      // countdown to next object spawn
+    spawnTimer:  1,      // short initial delay so objects appear quickly
     comboCount:  0,
     comboTimer:  0,
     enemySpawnChaos: 0,  // last chaos level we spawned extra enemies at
@@ -729,9 +729,9 @@ function doAction(g) {
   const item = g.nearItem
   item.broken = true
 
-  // Combo system — chain breaks within 3s for multiplier
+  // Combo system — chain breaks within config window
   g.comboCount++
-  g.comboTimer = 3.0
+  g.comboTimer = levelCfg(g).comboWindow
   const multi = Math.min(g.comboCount, 5)
   const pts = item.points * multi
   const coins = Math.ceil(pts / 5)
@@ -917,6 +917,27 @@ function drawHUD(g) {
     vc.fillStyle='#E74C3C'; vc.font=`bold ${Math.max(9,ss(5))}px monospace`; vc.textAlign='center'
     vc.fillText('KEEP CAUSING CHAOS!', canvas.width/2, _SOY+ss(VH_BASE)-ss(28))
     vc.shadowBlur=0
+  }
+
+  // Tutorial hints — level 1, first 12 seconds
+  if (g.level === 0 && g.time < 12) {
+    const hints = [
+      [0,  5,  'MOVE: A/D or ←/→'],
+      [2,  7,  'JUMP: W or ↑'],
+      [5,  10, 'BREAK OBJECTS: SPACE near them'],
+      [8,  12, 'FILL CHAOS TO 100% THEN ESCAPE!'],
+    ]
+    const hintFs = Math.max(9, ss(5))
+    hints.forEach(([start, end, txt]) => {
+      if (g.time >= start && g.time < end) {
+        const hw = ss(150), hh = ss(12), hx = canvas.width/2-hw/2, hy = _SOY+ss(VH_BASE)-ss(18)
+        vc.fillStyle='rgba(0,0,0,0.75)'; vc.fillRect(hx, hy, hw, hh)
+        vc.shadowColor='#00FFFF'; vc.shadowBlur=ss(6)
+        vc.fillStyle='#00FFFF'; vc.font=`${hintFs}px monospace`; vc.textAlign='center'
+        vc.fillText(txt, canvas.width/2, hy+hh*0.72)
+        vc.shadowBlur=0
+      }
+    })
   }
 
   // Boss hint
@@ -1217,6 +1238,17 @@ function triggerShakeG(g, intensity, dur) {
   g.shakeDur = dur; g.shakeX = intensity; g.shakeY = intensity
 }
 
+// ── LEVEL DIFFICULTY CONFIG ────────────────────────────────────
+const LEVEL_CONFIG = [
+  { spawnInterval:2.5, maxObjects:8, chaosDecay:0,   escapeTime:35, comboWindow:5, enemyPatrol:50 }, // L1 Easy
+  { spawnInterval:3.5, maxObjects:6, chaosDecay:0.6, escapeTime:30, comboWindow:4, enemyPatrol:60 }, // L2
+  { spawnInterval:4.2, maxObjects:5, chaosDecay:1.0, escapeTime:28, comboWindow:3, enemyPatrol:70 }, // L3
+  { spawnInterval:5.0, maxObjects:4, chaosDecay:1.5, escapeTime:25, comboWindow:3, enemyPatrol:80 }, // L4
+  { spawnInterval:6.0, maxObjects:3, chaosDecay:2.0, escapeTime:22, comboWindow:2, enemyPatrol:90 }, // L5
+  { spawnInterval:8.0, maxObjects:2, chaosDecay:3.0, escapeTime:20, comboWindow:1.5,enemyPatrol:100}, // L6 Extreme
+]
+function levelCfg(g) { return LEVEL_CONFIG[Math.min(g.level, LEVEL_CONFIG.length-1)] }
+
 // ── SPAWN INTERACTABLE ────────────────────────────────────────
 const SPAWN_TYPES = [
   {type:'toy',   color:'#FF69B4', w:10, h:12, points:10, chaosAdd:6,  label:'TOY'},
@@ -1240,7 +1272,8 @@ function spawnExtraEnemy(g, side) {
   const platform = g.platforms[0]
   const ex = side === 'left' ? 20 : VW_BASE - 20
   const ey = platform ? platform.y - 14 : VH_BASE - 28
-  g.enemies.push({ type:'mama', x:ex + g.cameraX, y:ey, hp:3, dir:side==='left'?1:-1, patrol:true, patrolDist:60, id:Math.random() })
+  const pd = levelCfg(g).enemyPatrol
+  g.enemies.push({ type:'mama', x:ex + g.cameraX, y:ey, hp:3, dir:side==='left'?1:-1, patrol:true, patrolDist:pd, id:Math.random() })
 }
 
 function update(dt) {
@@ -1271,22 +1304,27 @@ function update(dt) {
   // ── Combo timer decay ─────────────────────────────────────────
   if (g.comboTimer > 0) { g.comboTimer -= dt; if (g.comboTimer <= 0) g.comboCount = 0 }
 
-  // ── Object spawning — respawn every 3-5s ──────────────────────
+  const cfg = levelCfg(g)
+  // ── Object spawning ────────────────────────────────────────────
   const activeItems = g.interactables.filter(i => !i.broken).length
   g.spawnTimer -= dt
-  if (g.spawnTimer <= 0 && activeItems < 5 && !g.escapeActive) {
+  // Spawn faster when chaos is low (helps player recover)
+  const spawnInterval = g.chaos < 40 ? cfg.spawnInterval * 0.6 : cfg.spawnInterval
+  if (g.spawnTimer <= 0 && activeItems < cfg.maxObjects && !g.escapeActive) {
     spawnInteractable(g)
-    g.spawnTimer = 3 + Math.random() * 2.5
+    g.spawnTimer = spawnInterval + Math.random() * (spawnInterval * 0.5)
     sfxCoin()
   }
 
-  // ── Chaos dynamics ────────────────────────────────────────────
-  // Faster fill when there are active objects (player has things to do)
-  // Decay slowly if NO objects left (motivates breaking things quickly)
-  const chaosSpeed = activeItems > 0
-    ? 1.5 + g.time * 0.04   // rises faster over time
-    : -4                     // decays if nothing to break
-  g.chaos = Math.max(0, Math.min(100, g.chaos + chaosSpeed * dt))
+  // ── Chaos dynamics (level-configured) ─────────────────────────
+  if (activeItems > 0) {
+    // Rises when objects available, faster over time
+    const fill = 1.5 + g.time * 0.03
+    g.chaos = Math.min(100, g.chaos + fill * dt)
+  } else if (cfg.chaosDecay > 0) {
+    // Decays per level config when nothing to break
+    g.chaos = Math.max(0, g.chaos - cfg.chaosDecay * dt)
+  }
 
   // ── Escalating enemies ────────────────────────────────────────
   if (g.chaos > 50 && g.enemySpawnChaos < 50 && g.enemies.length < 3) {
@@ -1333,7 +1371,7 @@ function update(dt) {
   // Activate escape mode at 100% chaos
   if (g.chaos >= 100 && !g.escapeActive && !g.dead) {
     g.escapeActive = true
-    g.escapeTimer  = 30
+    g.escapeTimer  = levelCfg(g).escapeTime  // level-scaled escape time
     sfxAlarm()
     triggerShakeG(g, 5, 0.6)
     spawnBurst(g.escapeX - g.cameraX, g.escapeY - 20, '#00FFFF', 20)
@@ -1362,7 +1400,8 @@ function update(dt) {
   const doorVX = g.escapeActive ? VW_BASE - 32 + g.cameraX : g.escapeX  // virtual world x of door
   if (canEscape && g.x + PLAYER_W > doorVX && g.x < doorVX + 28) {
     g.escaped = true
-    g.score += 500; g.coins += 100   // escape bonus
+    const multi = g.level + 1        // harder levels = bigger rewards
+    g.score += 500 * multi; g.coins += 100 * multi
     save.highScores[g.level] = Math.max(save.highScores[g.level], g.score)
     if (g.level + 1 < LEVELS.length) save.unlockedLevels[g.level + 1] = true
     save.coins += g.coins
