@@ -1093,33 +1093,53 @@ function drawLevel(g) {
   drawParticles()
 
   // Escape door — always draw but much more prominent when escapeActive
-  const canEscapeDraw = g.escapeActive || g.objectivesCompleted >= g.objectives.length || g.bossDefeated || g.chaos >= 90
-  if (canEscapeDraw) {
-    const ez = spx(g.escapeX - g.cameraX), ezy = spy(g.escapeY - 38)
-    const ezw = ss(18), ezh = ss(38)
-    const pulse = 0.6 + 0.4*Math.abs(Math.sin(menuTime * (g.escapeActive ? 6 : 3)))
+  // Exit door — when escapeActive draw FIXED on right side of screen (always visible)
+  if (g.escapeActive || g.objectivesCompleted >= g.objectives.length || g.bossDefeated || g.chaos >= 90) {
+    const pulse = 0.55 + 0.45*Math.abs(Math.sin(menuTime * (g.escapeActive ? 7 : 2.5)))
     const doorCol = g.escapeActive ? '#00FFFF' : '#00FF88'
-    // Door fill
-    vc.fillStyle = `rgba(0,${g.escapeActive?200:180},${g.escapeActive?255:100},${0.25*pulse})`
-    vc.fillRect(ez, ezy, ezw, ezh)
-    // Door border glow
-    vc.shadowColor = doorCol; vc.shadowBlur = ss(g.escapeActive ? 14 : 6)
-    vc.strokeStyle = doorCol; vc.lineWidth = Math.max(1.5, ss(1.5))
-    vc.strokeRect(ez, ezy, ezw, ezh)
+
+    // When escapeActive: fixed right-edge position always on screen
+    const DOOR_W = ss(28), DOOR_H = ss(55)
+    const DOOR_X = g.escapeActive
+      ? _SOX + VW_BASE*_S - DOOR_W - ss(4)      // fixed right side of game area
+      : spx(g.escapeX - g.cameraX)              // world position otherwise
+    const DOOR_Y = g.escapeActive
+      ? _SOY + VH_BASE*_S - DOOR_H - ss(16)     // above floor, fixed
+      : spy(g.escapeY - 55)
+
+    // Door frame fill
+    vc.fillStyle = `rgba(0,10,30,0.85)`; vc.fillRect(DOOR_X, DOOR_Y, DOOR_W, DOOR_H)
+    // Neon border + glow
+    vc.shadowColor = doorCol; vc.shadowBlur = g.escapeActive ? ss(18)*pulse : ss(8)
+    vc.strokeStyle = doorCol; vc.lineWidth = Math.max(2, ss(2))
+    vc.strokeRect(DOOR_X, DOOR_Y, DOOR_W, DOOR_H)
+    // Inner glow fill
+    vc.fillStyle = `rgba(0,255,255,${0.08*pulse})`; vc.fillRect(DOOR_X, DOOR_Y, DOOR_W, DOOR_H)
+    // Left shine strip
+    vc.fillStyle = `rgba(255,255,255,${0.18*pulse})`; vc.fillRect(DOOR_X, DOOR_Y, ss(3), DOOR_H)
     vc.shadowBlur = 0
-    // Shine strip
-    vc.fillStyle = `rgba(255,255,255,${0.15*pulse})`; vc.fillRect(ez, ezy, ss(3), ezh)
-    // Label
-    const dfs = Math.max(8, ss(4))
+
+    // EXIT label above door
+    const dfs = Math.max(10, ss(5))
     vc.fillStyle = doorCol; vc.font = `bold ${dfs}px monospace`; vc.textAlign = 'center'
-    vc.shadowColor = doorCol; vc.shadowBlur = ss(6)
-    vc.fillText('EXIT', ez+ezw/2, ezy-ss(3))
-    // Arrow pointing to door when active
+    vc.shadowColor = doorCol; vc.shadowBlur = ss(8)
+    vc.fillText('EXIT', DOOR_X+DOOR_W/2, DOOR_Y - ss(4))
+
     if (g.escapeActive) {
-      vc.fillStyle = '#00FFFF'
-      vc.fillText('→', ez+ezw/2, ezy-ss(10))
-      // Particle sparkles around door
-      if (Math.random() > 0.5) spawnParticle(g.escapeX-g.cameraX+(Math.random()-0.5)*10, g.escapeY-20+Math.random()*20, '#00FFFF', (Math.random()-0.5)*0.5, -0.8, 0.4, 1)
+      // Pulsing arrows pointing to door
+      const arrOff = Math.sin(menuTime*8)*ss(3)
+      vc.fillStyle = '#00FFFF'; vc.font = `bold ${Math.max(14,ss(7))}px monospace`
+      vc.fillText('→', DOOR_X+DOOR_W/2+arrOff, DOOR_Y+DOOR_H*0.55)
+      // Scrolling arrow trail left of door
+      vc.font = `${Math.max(10,ss(5))}px monospace`
+      vc.fillStyle = `rgba(0,255,255,${0.5+0.3*Math.sin(menuTime*5)})`
+      vc.fillText('→→→', DOOR_X - ss(30), DOOR_Y+DOOR_H*0.55)
+      // Particle sparkles
+      if (Math.random() > 0.55) {
+        const sx = (DOOR_X + DOOR_W/2 - _SOX) / _S
+        const sy = (DOOR_Y + DOOR_H*Math.random() - _SOY) / _S
+        spawnParticle(sx, sy, '#00FFFF', (Math.random()-0.5)*0.8, -0.6-Math.random(), 0.5, 1)
+      }
     }
     vc.shadowBlur = 0; vc.textAlign = 'left'
   }
@@ -1242,16 +1262,19 @@ function update(dt) {
     }
   }
 
-  // Escape check — use world coords
-  const escX = g.escapeX
+  // Escape check
+  // When escapeActive: door is fixed at right edge in screen space (VW-32 in virtual)
+  // Map back to world x for collision
   const canEscape = g.escapeActive || g.objectivesCompleted >= g.objectives.length || g.bossDefeated
-  if (canEscape && Math.abs(g.x - escX) < 20 && Math.abs(g.y + PLAYER_H - g.escapeY) < 20) {
+  const doorVX = g.escapeActive ? VW_BASE - 32 + g.cameraX : g.escapeX  // virtual world x of door
+  if (canEscape && g.x + PLAYER_W > doorVX && g.x < doorVX + 28) {
     g.escaped = true
+    g.score += 500; g.coins += 100   // escape bonus
     save.highScores[g.level] = Math.max(save.highScores[g.level], g.score)
     if (g.level + 1 < LEVELS.length) save.unlockedLevels[g.level + 1] = true
     save.coins += g.coins
     writeSave()
-    state = 'win'
+    state = 'levelcomplete'
     sfxWin()
   }
 
@@ -1696,6 +1719,61 @@ function renderGameOver() {
 }
 
 // --- WIN ---
+function renderLevelComplete() {
+  clearButtons()
+  ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(0, 0, VW, VH)
+
+  // Confetti
+  for (let i = 0; i < 30; i++) {
+    const cols = ['#00FFFF','#FF69B4','#F1C40F','#2ECC71','#9B59B6']
+    ctx.fillStyle = cols[(i + Math.floor(menuTime*4)) % cols.length]
+    ctx.fillRect(((i*47+menuTime*60)%VW)|0, ((menuTime*40+i*23)%VH)|0, 4, 4)
+  }
+
+  // LEVEL COMPLETE title
+  const pulse = 0.88 + 0.12*Math.sin(menuTime*5)
+  ctx.save()
+  ctx.shadowColor = '#2ECC71'; ctx.shadowBlur = 30
+  ctx.fillStyle = '#2ECC71'
+  ctx.font = `bold ${Math.min(20, VW*0.065)*pulse|0}px monospace`
+  ctx.textAlign = 'center'
+  ctx.fillText('LEVEL COMPLETE!', VW/2, VH*0.20)
+  ctx.restore()
+
+  // Level name
+  ctx.fillStyle = '#FF69B4'; ctx.font = `bold ${Math.min(8,VW*0.025)|0}px monospace`; ctx.textAlign='center'
+  ctx.fillText(LEVELS[game?.level||0]?.name||'', VW/2, VH*0.30)
+
+  // Stats box
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(VW/2-55, VH*0.36, 110, 55)
+  ctx.strokeStyle='rgba(0,255,255,0.5)'; ctx.lineWidth=0.75; ctx.strokeRect(VW/2-55, VH*0.36, 110, 55)
+  const rows=[
+    ['SCORE', (game?.score||0).toLocaleString(), '#00FFFF'],
+    ['+BONUS','500 pts','#F1C40F'],
+    ['COINS', '+'+(game?.coins||0), '#F1C40F'],
+  ]
+  ctx.font=`${Math.min(6,VW*0.019)|0}px monospace`
+  rows.forEach(([l,v,c],i)=>{
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.textAlign='left'; ctx.fillText(l, VW/2-50, VH*0.36+14+i*14)
+    ctx.fillStyle=c; ctx.textAlign='right'; ctx.fillText(v, VW/2+50, VH*0.36+14+i*14)
+  })
+
+  const bw=Math.min(90,VW*0.28), bh=13, bx=VW/2-bw/2
+  const nextLvl=(game?.level||0)+1
+  if (nextLvl < LEVELS.length) {
+    drawButton(bx, VH*0.68, bw, bh, 'NEXT LEVEL', menuHovered===0, '#2ECC71')
+    registerButton(bx, VH*0.68, bw, bh, ()=>{ game=initGame(nextLvl); state='playing'; sfxConfirm() })
+    drawButton(bx, VH*0.68+bh+6, bw, bh, 'MENU', menuHovered===1, '#9B59B6')
+    registerButton(bx, VH*0.68+bh+6, bw, bh, ()=>{ state='menu' })
+  } else {
+    // All levels done — final win
+    ctx.fillStyle='#F1C40F'; ctx.font=`bold ${Math.min(8,VW*0.025)|0}px monospace`; ctx.textAlign='center'
+    ctx.fillText('ALL LEVELS COMPLETE!', VW/2, VH*0.66)
+    drawButton(bx, VH*0.72, bw, bh, 'MENU', menuHovered===0, '#FF69B4')
+    registerButton(bx, VH*0.72, bw, bh, ()=>{ state='menu' })
+  }
+}
+
 function renderWin() {
   clearButtons()
   ctx.fillStyle = '#0A1A0A'; ctx.fillRect(0, 0, VW, VH)
@@ -1895,8 +1973,9 @@ function gameLoop(ts) {
     beginMenuDraw()
     if      (state === 'menu')        renderMenu()
     else if (state === 'levelSelect') renderLevelSelect()
-    else if (state === 'gameover')    renderGameOver()
-    else if (state === 'win')         renderWin()
+    else if (state === 'gameover')      renderGameOver()
+    else if (state === 'levelcomplete') renderLevelComplete()
+    else if (state === 'win')           renderWin()
     else if (state === 'shop')        renderShop()
     else if (state === 'settings')    renderSettings()
     else if (state === 'howtoplay')   renderHowToPlay()
