@@ -433,90 +433,91 @@ function drawMenuBg() {
 function drawPlayer(g) {
   if (g.invincible > 0 && Math.floor(g.invincible * 10) % 2 === 0) return
   const skin = SKINS[g.skin] || SKINS['default']
-  const bc = skin.color, dc = skin.darkColor
+  let bc = skin.color
+  if (bc === 'rainbow') bc = `hsl(${(Date.now()/8)%360},100%,60%)`
   const flip = !g.facingRight
 
-  // Virtual coords (for positioning)
-  const vhx = g.x - g.cameraX, vhy = g.y
-  // Sprite is 16×20 virtual units centered on hitbox
-  const pw = 16, ph = 20
-  const vpx = vhx - (pw - PLAYER_W) / 2
-  const vpy = vhy - (ph - PLAYER_H)
+  // Virtual sprite center (slightly above hitbox center)
+  const vcx = g.x - g.cameraX + PLAYER_W/2
+  const vcy = g.y + PLAYER_H/2
   // Screen coords
-  const px = spx(vpx), py = spy(vpy)
+  const cx = spx(vcx), cy = spy(vcy)
+  const s = _S
 
-  // Bob in virtual units → scale to screen
+  // Bob when walking
   const bobV = g.onGround && Math.abs(g.vx) > 0.3 ? Math.sin(g.animFrame * 0.8) : 0
-  const bob  = ss(bobV)
-  // Helper: draw pixel-rect at virtual offset from sprite origin (px,py)
-  const r = (dx, dy, dw, dh) => vc.fillRect(Math.round(px+ss(dx)), Math.round(py+ss(dy)), Math.max(1,ss(dw)), Math.max(1,ss(dh)))
+  const bob  = ss(bobV * 0.8)
 
   vc.save()
-  if (flip) { vc.translate(px+ss(pw)/2, 0); vc.scale(-1,1); vc.translate(-(px+ss(pw)/2),0) }
+  if (flip) { vc.translate(cx, 0); vc.scale(-1, 1); vc.translate(-cx, 0) }
+  vc.shadowColor = bc; vc.shadowBlur = ss(10)
 
   // Ground shadow
-  vc.fillStyle = 'rgba(0,0,0,0.28)'
-  vc.fillRect(Math.round(px+ss(2)), Math.round(spy(g.y+PLAYER_H)), ss(pw-4), Math.max(2,ss(2)))
+  vc.fillStyle = 'rgba(0,0,0,0.22)'
+  vc.beginPath(); vc.ellipse(cx, spy(g.y + PLAYER_H) + ss(1), ss(8), ss(2.5), 0, 0, Math.PI*2); vc.fill()
+  vc.shadowBlur = ss(8)
 
-  // Legs
+  // Legs (animated)
+  vc.fillStyle = bc
   const walk = Math.floor(g.animFrame % 4)
-  vc.fillStyle = dc
   if (!g.onGround) {
-    r(3, ph-4, 4, 3); r(10, ph-4, 4, 3)  // tucked
+    vc.fillRect(Math.round(cx-ss(4)), Math.round(cy+ss(6)+bob), ss(3.5), ss(5))
+    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(6)+bob), ss(3.5), ss(5))
   } else if (walk < 2) {
-    r(2, ph-1, 4, 5); r(10, ph-3, 4, 3)
+    vc.fillRect(Math.round(cx-ss(5)), Math.round(cy+ss(5)+bob), ss(3.5), ss(7))
+    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(5)+bob), ss(3.5), ss(4))
   } else {
-    r(2, ph-3, 4, 3); r(10, ph-1, 4, 5)
+    vc.fillRect(Math.round(cx-ss(5)), Math.round(cy+ss(5)+bob), ss(3.5), ss(4))
+    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(5)+bob), ss(3.5), ss(7))
   }
+
+  // Body (oval)
+  vc.fillStyle = bc
+  vc.beginPath(); vc.ellipse(cx, cy+ss(2)+bob, ss(6), ss(8), 0, 0, Math.PI*2); vc.fill()
+
+  // Head (circle)
+  vc.beginPath(); vc.arc(cx, cy-ss(7)+bob, ss(7), 0, Math.PI*2); vc.fill()
+
+  // Ears (ovals, slightly angled)
+  vc.beginPath(); vc.ellipse(cx-ss(6), cy-ss(13)+bob, ss(3), ss(5), -0.25, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(6), cy-ss(13)+bob, ss(3), ss(5),  0.25, 0, Math.PI*2); vc.fill()
+  // Inner ear
+  vc.fillStyle = '#FFB6C1'
+  vc.beginPath(); vc.ellipse(cx-ss(6), cy-ss(13)+bob, ss(1.5), ss(2.8), -0.25, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(6), cy-ss(13)+bob, ss(1.5), ss(2.8),  0.25, 0, Math.PI*2); vc.fill()
+
+  // Snout (oval)
+  vc.fillStyle = '#FFB6C1'
+  vc.beginPath(); vc.ellipse(cx+ss(3), cy-ss(5.5)+bob, ss(4), ss(3), 0, 0, Math.PI*2); vc.fill()
+  // Nostrils
+  vc.fillStyle = '#CC6688'
+  vc.beginPath(); vc.ellipse(cx+ss(2), cy-ss(5.5)+bob, ss(1), ss(0.9), 0, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(4.5), cy-ss(5.5)+bob, ss(1), ss(0.9), 0, 0, Math.PI*2); vc.fill()
+
+  // Eyes (white + pupil)
+  vc.fillStyle = '#FFF'
+  vc.beginPath(); vc.ellipse(cx-ss(1.5), cy-ss(8.5)+bob, ss(2.5), ss(3.2), 0, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(3.5), cy-ss(8.5)+bob, ss(2.5), ss(3.2), 0, 0, Math.PI*2); vc.fill()
+  vc.fillStyle = '#111'
+  vc.beginPath(); vc.arc(cx-ss(0.8), cy-ss(8.5)+bob, ss(1.3), 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+ss(4.2), cy-ss(8.5)+bob, ss(1.3), 0, Math.PI*2); vc.fill()
 
   // Chaos aura
   if (g.chaos > 50) {
     const gp = (g.chaos-50)/50
-    vc.globalAlpha = gp*0.38*(0.6+0.4*Math.sin(menuTime*8))
-    vc.fillStyle = g.chaos>75?'#FF0000':'#9B59B6'
-    vc.fillRect(Math.round(px+ss(-3)), Math.round(py+ss(-2)-bob), ss(pw+6), ss(ph+6))
+    vc.globalAlpha = gp*0.35*(0.6+0.4*Math.sin(menuTime*8))
+    vc.fillStyle = g.chaos>75 ? '#FF0000' : '#9B59B6'
+    vc.beginPath(); vc.ellipse(cx, cy-ss(3)+bob, ss(12), ss(16), 0, 0, Math.PI*2); vc.fill()
     vc.globalAlpha = 1
   }
 
-  // Body oval
-  vc.fillStyle = bc
-  r(2, 11+bobV, pw-4, 9); r(1, 12+bobV, pw-2, 7); r(3, 10+bobV, pw-6, 10)
-
-  // Head
-  r(3, 1+bobV, pw-6, 11); r(4, 0+bobV, pw-8, 12); r(2, 3+bobV, pw-4, 8)
-
-  // Ears
-  vc.fillStyle = bc
-  r(3, -4+bobV, 5, 5); r(9, -4+bobV, 5, 5)
-  vc.fillStyle = '#FFB6C1'
-  r(4, -3+bobV, 2, 3); r(10, -3+bobV, 2, 3)
-
-  // Snout
-  vc.fillStyle = '#FFB6C1'
-  r(11, 5+bobV, 6, 5); r(10, 6+bobV, 7, 3)
-  vc.fillStyle = dc
-  r(12, 7+bobV, 2, 2); r(15, 7+bobV, 2, 2)
-
-  // Eyes
-  vc.fillStyle = '#FFFFFF'
-  r(4, 3+bobV, 4, 4); r(8, 3+bobV, 4, 4)
-  vc.fillStyle = '#111'
-  r(6, 4+bobV, 2, 2); r(10, 4+bobV, 2, 2)
-
-  // Mouth
-  vc.fillStyle = dc
-  r(8, 8+bobV, 3, 1)
-
   vc.restore()
 
-  // Trail particles when moving
-  if (Math.abs(g.vx) > 0.8 && Math.random() > 0.4) {
-    spawnParticle(px+pw/2, py+ph-4+bob, bc, (Math.random()-0.5)*0.4, -0.2, 0.25+Math.random()*0.2, 1)
-  }
-  // Jump sparkle
-  if (!g.onGround && g.vy < -3 && Math.random() > 0.5) {
-    spawnParticle(px+pw/2, py+ph+bob, '#00FFFF', (Math.random()-0.5)*1.5, Math.random()*0.5, 0.2, 1)
-  }
+  // Trail particles
+  if (Math.abs(g.vx) > 0.8 && Math.random() > 0.4)
+    spawnParticle(vcx+(Math.random()-0.5)*4, g.y+PLAYER_H-2, bc, (Math.random()-0.5)*0.4, -0.2, 0.25+Math.random()*0.2, 1)
+  if (!g.onGround && g.vy < -3 && Math.random() > 0.5)
+    spawnParticle(vcx, g.y+PLAYER_H, '#00FFFF', (Math.random()-0.5)*1.5, Math.random()*0.5, 0.2, 1)
 }
 
 // ── 8. ENEMY SYSTEM ──────────────────────────────────────────
@@ -560,32 +561,85 @@ function drawHpBar(x, y, w, hp, maxHp) {
 function drawEnemy(e, cameraX) {
   const exV = e.x - cameraX, eyV = e.y
   if (exV < -40 || exV > VW_BASE + 40) return
-  const ex = spx(exV), ey = spy(eyV)
-  const w = ss(12), h = ss(14)
+  const cx = spx(exV), cy = spy(eyV)  // top of enemy
+  const s = _S
 
-  // Helper: draw relative to enemy top-left using virtual offsets
-  const er = (dx,dy,dw,dh) => vc.fillRect(Math.round(ex+ss(dx)), Math.round(ey+ss(dy)), Math.max(1,ss(dw)), Math.max(1,ss(dh)))
+  vc.save()
 
   if (e.type === 'mama') {
-    vc.fillStyle='#CC3380'; er(-1,3,14,9)
-    vc.fillStyle='#FF4499'; er(0,0,12,7)
-    vc.fillStyle='#AA2255'; er(7,2,5,3)
-    vc.fillStyle='#FF0000'; er(1,1,2,2); er(8,1,2,2)
-    vc.fillStyle='#000';    er(1,0,3,1); er(8,0,3,1)
-    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
+    // Large angry mama pig
+    vc.fillStyle='#E75480'
+    vc.shadowColor='#FF69B4'; vc.shadowBlur=ss(10)
+    // Body (big oval)
+    vc.beginPath(); vc.ellipse(cx, cy+ss(7), ss(8), ss(10), 0, 0, Math.PI*2); vc.fill()
+    // Head
+    vc.beginPath(); vc.arc(cx, cy-ss(5), ss(9), 0, Math.PI*2); vc.fill()
+    // Ears
+    vc.beginPath(); vc.ellipse(cx-ss(7), cy-ss(12), ss(3), ss(5), -0.3, 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.ellipse(cx+ss(7), cy-ss(12), ss(3), ss(5), 0.3, 0, Math.PI*2); vc.fill()
+    // Snout
+    vc.fillStyle='#FFB6C1'
+    vc.beginPath(); vc.ellipse(cx, cy-ss(2), ss(5), ss(4), 0, 0, Math.PI*2); vc.fill()
+    // Nostrils
+    vc.fillStyle='#CC3366'
+    vc.beginPath(); vc.ellipse(cx-ss(2), cy-ss(2), ss(1.2), ss(1), 0, 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.ellipse(cx+ss(2), cy-ss(2), ss(1.2), ss(1), 0, 0, Math.PI*2); vc.fill()
+    // Angry eyes (slanted brows)
+    vc.fillStyle='#000'
+    vc.fillRect(Math.round(cx-ss(6)), Math.round(cy-ss(7.5)), ss(4), ss(2))
+    vc.fillRect(Math.round(cx+ss(2)), Math.round(cy-ss(7.5)), ss(4), ss(2))
+    // Angry brows
+    vc.strokeStyle='#000'; vc.lineWidth=Math.max(1,ss(0.8))
+    vc.beginPath(); vc.moveTo(cx-ss(7), cy-ss(10)); vc.lineTo(cx-ss(3), cy-ss(9)); vc.stroke()
+    vc.beginPath(); vc.moveTo(cx+ss(7), cy-ss(10)); vc.lineTo(cx+ss(3), cy-ss(9)); vc.stroke()
+    // Purple apron
+    vc.fillStyle='#8E44AD'; vc.shadowBlur=0
+    vc.fillRect(Math.round(cx-ss(7)), Math.round(cy+ss(2)), ss(14), ss(10))
+    drawHpBar(cx-ss(7), cy-ss(17), ss(14), e.hp, 3)
+
   } else if (e.type === 'teacher') {
-    vc.fillStyle='#3A5A8A'; er(0,4,12,8)
-    vc.fillStyle='#5A7AAA'; er(1,0,10,6)
-    vc.fillStyle='#000';    er(2,1,2,2); er(7,1,2,2)
-    vc.fillStyle='#888';    er(1,1,3,3); er(6,1,3,3)
-    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
+    // Teacher in dark robe with glasses
+    vc.fillStyle='#2C3E50'
+    vc.beginPath(); vc.ellipse(cx, cy+ss(8), ss(7), ss(10), 0, 0, Math.PI*2); vc.fill()
+    // Head
+    vc.fillStyle='#FF69B4'
+    vc.beginPath(); vc.arc(cx, cy-ss(4), ss(7), 0, Math.PI*2); vc.fill()
+    // Glasses
+    vc.strokeStyle='#333'; vc.lineWidth=Math.max(1,ss(0.7)); vc.shadowBlur=0
+    vc.strokeRect(Math.round(cx-ss(6)), Math.round(cy-ss(6.5)), ss(4.5), ss(4))
+    vc.strokeRect(Math.round(cx+ss(1.5)), Math.round(cy-ss(6.5)), ss(4.5), ss(4))
+    vc.beginPath(); vc.moveTo(cx-ss(1.5), cy-ss(4.5)); vc.lineTo(cx+ss(1.5), cy-ss(4.5)); vc.stroke()
+    // Eyes behind glasses
+    vc.fillStyle='#000'
+    vc.beginPath(); vc.arc(cx-ss(3.5), cy-ss(4.5), ss(1), 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.arc(cx+ss(3.5), cy-ss(4.5), ss(1), 0, Math.PI*2); vc.fill()
+    // Book in hand
+    vc.fillStyle='#8B4513'
+    vc.fillRect(Math.round(cx-ss(12)), Math.round(cy+ss(4)), ss(5), ss(8))
+    drawHpBar(cx-ss(6), cy-ss(14), ss(12), e.hp, 3)
+
   } else if (e.type === 'guard') {
-    vc.fillStyle='#2A2A5A'; er(0,4,12,8)
-    vc.fillStyle='#4A4A7A'; er(1,0,10,6)
-    vc.fillStyle='#FF8800'; er(3,5,4,4)
-    vc.fillStyle='#000';    er(2,1,2,2); er(7,1,2,2)
-    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
+    // Security guard with badge
+    vc.fillStyle='#1A237E'
+    vc.beginPath(); vc.ellipse(cx, cy+ss(7), ss(7), ss(10), 0, 0, Math.PI*2); vc.fill()
+    vc.fillStyle='#3F51B5'
+    vc.beginPath(); vc.arc(cx, cy-ss(4), ss(7), 0, Math.PI*2); vc.fill()
+    // Cap
+    vc.fillStyle='#1A237E'
+    vc.fillRect(Math.round(cx-ss(8)), Math.round(cy-ss(8)), ss(16), ss(3))
+    vc.beginPath(); vc.arc(cx, cy-ss(7.5), ss(5), Math.PI, 0); vc.fill()
+    // Badge
+    vc.fillStyle='#FFD700'; vc.shadowColor='#FFD700'; vc.shadowBlur=ss(5)
+    vc.fillRect(Math.round(cx-ss(2.5)), Math.round(cy+ss(2)), ss(5), ss(4))
+    vc.shadowBlur=0
+    // Eyes
+    vc.fillStyle='#000'
+    vc.beginPath(); vc.arc(cx-ss(2.5), cy-ss(4.5), ss(1), 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.arc(cx+ss(2.5), cy-ss(4.5), ss(1), 0, Math.PI*2); vc.fill()
+    drawHpBar(cx-ss(6), cy-ss(14), ss(12), e.hp, 3)
   }
+
+  vc.restore()
 }
 
 // ── 9. BOSS SYSTEM ───────────────────────────────────────────
@@ -1092,6 +1146,227 @@ function drawBackground(g, lvl) {
   vc.restore()  // end drawBackground scale transform
 }
 
+// ── OBJECT DRAW FUNCTIONS ─────────────────────────────────────
+// All coords are screen pixels (spx/spy already applied by caller)
+// cx,cy = screen center of object
+
+function drawObjToyBox(cx, cy, s) {
+  // Brown box with colorful toys peeking out
+  vc.fillStyle='#7B3F00'; vc.fillRect(cx-s*6, cy-s*3, s*12, s*10)   // box
+  vc.fillStyle='#A0522D'; vc.fillRect(cx-s*7, cy-s*4.5, s*14, s*2.5) // lid
+  // Pink block peeking
+  vc.fillStyle='#FF69B4'; vc.fillRect(cx-s*5, cy-s*6.5, s*4, s*4)
+  // Cyan ball peeking
+  vc.fillStyle='#00FFFF'
+  vc.beginPath(); vc.arc(cx+s*3, cy-s*6, s*2.5, 0, Math.PI*2); vc.fill()
+  // Yellow block
+  vc.fillStyle='#F1C40F'; vc.fillRect(cx-s*1, cy-s*7, s*3, s*3)
+}
+
+function drawObjJuice(cx, cy, s) {
+  // Glass cup
+  vc.fillStyle='rgba(255,100,150,0.7)'
+  vc.beginPath()
+  vc.moveTo(cx-s*3, cy+s*5); vc.lineTo(cx-s*2.5, cy-s*5)
+  vc.lineTo(cx+s*2.5, cy-s*5); vc.lineTo(cx+s*3, cy+s*5)
+  vc.closePath(); vc.fill()
+  vc.strokeStyle='#FF1493'; vc.lineWidth=Math.max(1,s*0.5)
+  vc.stroke()
+  // Straw
+  vc.fillStyle='#FFF'; vc.fillRect(cx-s*0.8, cy-s*10, s*1.5, s*6)
+  // Bend of straw
+  vc.fillRect(cx-s*0.8, cy-s*10, s*3, s*1.5)
+}
+
+function drawObjTeddy(cx, cy, s) {
+  vc.fillStyle='#CD853F'
+  // Body
+  vc.beginPath(); vc.ellipse(cx, cy+s*1, s*5, s*7, 0, 0, Math.PI*2); vc.fill()
+  // Head
+  vc.beginPath(); vc.arc(cx, cy-s*6, s*5, 0, Math.PI*2); vc.fill()
+  // Ears
+  vc.beginPath(); vc.arc(cx-s*4, cy-s*10, s*2.5, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+s*4, cy-s*10, s*2.5, 0, Math.PI*2); vc.fill()
+  // Inner ears
+  vc.fillStyle='#DEB887'
+  vc.beginPath(); vc.arc(cx-s*4, cy-s*10, s*1.2, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+s*4, cy-s*10, s*1.2, 0, Math.PI*2); vc.fill()
+  // Snout
+  vc.fillStyle='#DEB887'
+  vc.beginPath(); vc.ellipse(cx, cy-s*4.5, s*2.5, s*2, 0, 0, Math.PI*2); vc.fill()
+  // Nose
+  vc.fillStyle='#5C3317'
+  vc.beginPath(); vc.ellipse(cx, cy-s*5, s*1.2, s*1, 0, 0, Math.PI*2); vc.fill()
+  // Eyes (buttons)
+  vc.fillStyle='#000'
+  vc.beginPath(); vc.arc(cx-s*2, cy-s*7, s*1, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+s*2, cy-s*7, s*1, 0, Math.PI*2); vc.fill()
+}
+
+function drawObjLamp(cx, cy, s) {
+  // Base
+  vc.fillStyle='#2C3E50'; vc.fillRect(cx-s*4, cy+s*3, s*8, s*2.5)
+  // Stem
+  vc.fillRect(cx-s*1.2, cy-s*8, s*2.4, s*12)
+  // Shade trapezoid
+  vc.fillStyle='#F39C12'
+  vc.shadowColor='#F39C12'; vc.shadowBlur=ss(8)
+  vc.beginPath()
+  vc.moveTo(cx-s*7, cy-s*8); vc.lineTo(cx+s*7, cy-s*8)
+  vc.lineTo(cx+s*4.5, cy-s*14); vc.lineTo(cx-s*4.5, cy-s*14)
+  vc.closePath(); vc.fill()
+  vc.shadowBlur=0
+  // Glow dot
+  vc.fillStyle='rgba(255,240,150,0.6)'
+  vc.beginPath(); vc.arc(cx, cy-s*9, s*2, 0, Math.PI*2); vc.fill()
+}
+
+function drawObjBookshelf(cx, cy, s) {
+  // Frame
+  vc.fillStyle='#5D4037'; vc.fillRect(cx-s*10, cy-s*14, s*20, s*18)
+  // Shelves
+  vc.fillStyle='#6D4C41'
+  vc.fillRect(cx-s*9, cy-s*5, s*18, s*1.5)
+  vc.fillRect(cx-s*9, cy+s*4, s*18, s*1.5)
+  // Books row 1
+  const bc1=['#E74C3C','#3498DB','#2ECC71','#F1C40F','#9B59B6']
+  bc1.forEach((c,i)=>{ vc.fillStyle=c; vc.fillRect(cx-s*9+i*s*3.5, cy-s*13, s*3, s*8) })
+  // Books row 2
+  const bc2=['#1ABC9C','#E67E22','#2980B9','#8E44AD','#27AE60']
+  bc2.forEach((c,i)=>{ vc.fillStyle=c; vc.fillRect(cx-s*9+i*s*3.5, cy-s*4, s*3, s*8) })
+}
+
+function drawObjFishTank(cx, cy, s) {
+  // Tank frame
+  vc.strokeStyle='#7F8C8D'; vc.lineWidth=Math.max(1,s*1)
+  vc.strokeRect(cx-s*8, cy-s*7, s*16, s*12)
+  // Water
+  vc.fillStyle='rgba(52,152,219,0.55)'
+  vc.fillRect(cx-s*7, cy-s*6, s*14, s*11)
+  // Gravel
+  vc.fillStyle='#7F8C8D'; vc.fillRect(cx-s*7, cy+s*3, s*14, s*2)
+  // Fish (animated)
+  const fishOff = Math.sin(menuTime*2)*s*3
+  vc.fillStyle='#E67E22'
+  vc.beginPath(); vc.ellipse(cx+fishOff, cy-s*1.5, s*3.5, s*2, 0, 0, Math.PI*2); vc.fill()
+  // Fish tail
+  vc.beginPath()
+  vc.moveTo(cx+fishOff-s*3, cy-s*1.5)
+  vc.lineTo(cx+fishOff-s*6, cy-s*3.5)
+  vc.lineTo(cx+fishOff-s*6, cy+s*0.5)
+  vc.closePath(); vc.fill()
+  // Bubbles
+  vc.fillStyle='rgba(255,255,255,0.5)'
+  vc.beginPath(); vc.arc(cx+s*3, cy-s*4, s*1, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+s*5, cy-s*5.5, s*0.7, 0, Math.PI*2); vc.fill()
+}
+
+function drawObjRemote(cx, cy, s) {
+  vc.fillStyle='#2C3E50'; vc.fillRect(cx-s*2.5, cy-s*7, s*5, s*12)
+  // Power button (red)
+  vc.fillStyle='#E74C3C'; vc.fillRect(cx-s*1.8, cy-s*6, s*3.5, s*2.5)
+  // Channel buttons
+  vc.fillStyle='#7F8C8D'
+  vc.fillRect(cx-s*1.8, cy-s*2.5, s*3.5, s*1.5)
+  vc.fillRect(cx-s*1.8, cy+s*0.5, s*3.5, s*1.5)
+  // D-pad
+  vc.fillStyle='#34495E'; vc.fillRect(cx-s*2, cy+s*3, s*4, s*1.5)
+  vc.fillRect(cx-s*1, cy+s*2, s*2, s*3.5)
+}
+
+function drawObjPicture(cx, cy, s) {
+  // Frame
+  vc.fillStyle='#8B4513'; vc.fillRect(cx-s*7, cy-s*5, s*14, s*11)
+  // Gold border
+  vc.fillStyle='#DAA520'; vc.fillRect(cx-s*6, cy-s*4, s*12, s*9)
+  // Sky photo
+  vc.fillStyle='#87CEEB'; vc.fillRect(cx-s*5, cy-s*3, s*10, s*7)
+  // Sun
+  vc.fillStyle='#F39C12'
+  vc.beginPath(); vc.arc(cx+s*2, cy-s*1, s*2, 0, Math.PI*2); vc.fill()
+  // Mountains
+  vc.fillStyle='#6B8E23'
+  vc.beginPath()
+  vc.moveTo(cx-s*5, cy+s*3.5); vc.lineTo(cx-s*2, cy); vc.lineTo(cx+s*1, cy+s*3.5)
+  vc.lineTo(cx+s*3, cy-s*0.5); vc.lineTo(cx+s*5, cy+s*3.5)
+  vc.closePath(); vc.fill()
+}
+
+function drawObjBall(cx, cy, s) {
+  vc.fillStyle='#FFFFFF'
+  vc.beginPath(); vc.arc(cx, cy-s*2, s*5, 0, Math.PI*2); vc.fill()
+  // Pentagons
+  vc.fillStyle='#1A1A1A'
+  vc.beginPath(); vc.arc(cx, cy-s*2, s*1.8, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx-s*2.5, cy-s*0.5, s*1.2, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+s*2.5, cy-s*0.5, s*1.2, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx, cy-s*4, s*1, 0, Math.PI*2); vc.fill()
+}
+
+function drawObjBlocks(cx, cy, s) {
+  vc.fillStyle='#E74C3C'; vc.fillRect(cx-s*5, cy-s*2, s*4.5, s*4.5)
+  vc.fillStyle='#3498DB'; vc.fillRect(cx+s*0.5, cy-s*2, s*4.5, s*4.5)
+  vc.fillStyle='#F1C40F'; vc.fillRect(cx-s*2.5, cy-s*6.5, s*4.5, s*4.5)
+  vc.fillStyle='#2ECC71'; vc.fillRect(cx-s*2.5, cy-s*11, s*4.5, s*4.5)
+}
+
+function drawObjAlarm(cx, cy, s) {
+  // Red alarm box
+  vc.fillStyle='#C0392B'; vc.fillRect(cx-s*3, cy-s*6, s*6, s*8)
+  // Handle at top
+  vc.fillStyle='#E74C3C'
+  vc.beginPath(); vc.arc(cx, cy-s*7.5, s*2, Math.PI, 0); vc.fill()
+  // Glass cover
+  vc.fillStyle='rgba(255,100,100,0.3)'; vc.fillRect(cx-s*2.5, cy-s*5.5, s*5, s*6)
+  // Bell button
+  vc.fillStyle='#FF0000'
+  vc.beginPath(); vc.arc(cx, cy-s*2.5, s*2.5, 0, Math.PI*2); vc.fill()
+  // Glow
+  vc.shadowColor='#FF0000'; vc.shadowBlur=ss(10)
+  vc.beginPath(); vc.arc(cx, cy-s*2.5, s*2, 0, Math.PI*2); vc.fill()
+  vc.shadowBlur=0
+}
+
+function drawObjSpeaker(cx, cy, s) {
+  vc.fillStyle='#2C3E50'; vc.fillRect(cx-s*4, cy-s*5, s*8, s*9)
+  // Speaker grille
+  vc.fillStyle='#555'
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++)
+    vc.fillRect(cx-s*2.5+j*s*1.8, cy-s*4+i*s*1.8, s*1.2, s*1.2)
+  // Speaker cone
+  vc.fillStyle='#7F8C8D'
+  vc.beginPath(); vc.arc(cx, cy, s*2.5, 0, Math.PI*2); vc.fill()
+  vc.fillStyle='#95A5A6'
+  vc.beginPath(); vc.arc(cx, cy, s*1.2, 0, Math.PI*2); vc.fill()
+  // Sound waves
+  vc.strokeStyle='rgba(0,255,255,0.4)'; vc.lineWidth=Math.max(1,s*0.5)
+  vc.beginPath(); vc.arc(cx+s*5, cy, s*2.5, -0.6, 0.6); vc.stroke()
+  vc.beginPath(); vc.arc(cx+s*5, cy, s*4, -0.6, 0.6); vc.stroke()
+}
+
+// Main dispatch: draw object by type at screen coords (center)
+function drawObject(type, cx, cy, s) {
+  vc.save()
+  switch(type) {
+    case 'toy':    drawObjToyBox(cx, cy, s);   break
+    case 'juice':  drawObjJuice(cx, cy, s);    break
+    case 'teddy':  drawObjTeddy(cx, cy, s);    break
+    case 'lamp':   drawObjLamp(cx, cy, s);     break
+    case 'shelf':  drawObjBookshelf(cx, cy, s); break
+    case 'fish':   drawObjFishTank(cx, cy, s); break
+    case 'remote': drawObjRemote(cx, cy, s);   break
+    case 'picture':drawObjPicture(cx, cy, s);  break
+    case 'ball':   drawObjBall(cx, cy, s);     break
+    case 'blocks': drawObjBlocks(cx, cy, s);   break
+    case 'alarm':  drawObjAlarm(cx, cy, s);    break
+    case 'speaker':drawObjSpeaker(cx, cy, s);  break
+    default: // fallback colored circle
+      vc.fillStyle='#FF69B4'
+      vc.beginPath(); vc.arc(cx, cy, s*4, 0, Math.PI*2); vc.fill()
+  }
+  vc.restore()
+}
+
 function drawLevel(g) {
   const lvl = LEVELS[g.level]
   // Clear full native canvas first, then fill virtual game area
@@ -1127,15 +1402,20 @@ function drawLevel(g) {
 
   g.interactables.forEach(item => {
     if (item.broken) return
-    const ix = spx(item.x - g.cameraX), iy = spy(item.y)
-    const iw = ss(item.w), ih = ss(item.h)
-    vc.fillStyle = item.color; vc.fillRect(ix, iy, iw, ih)
-    // Label
-    const fs = Math.max(8, ss(5))
-    vc.fillStyle = '#FFF'; vc.font = `${fs}px monospace`; vc.textAlign = 'center'
-    const labels = { toy:'TOY', juice:'JUICE', wall:'MARK', alarm:'!!', speaker:'SND', frogs:'FRG', wave:'~' }
-    vc.fillText(labels[item.type]||'?', ix+iw/2, iy+ih/2+fs*0.35)
-    vc.textAlign = 'left'
+    // Center of item in screen coords
+    const cx = spx(item.x - g.cameraX + item.w/2)
+    const cy = spy(item.y + item.h/2)
+    const s  = Math.max(0.8, _S * 0.85)  // base scale unit
+    // Near-player glow
+    const playerScreenX = spx(g.x - g.cameraX + PLAYER_W/2)
+    const nearDist = Math.abs(playerScreenX - cx)
+    if (nearDist < ss(20)) {
+      vc.shadowColor = '#00FFFF'; vc.shadowBlur = ss(8) * (1 - nearDist/ss(20))
+    }
+    // Subtle bob animation
+    const bobOffset = Math.sin(menuTime*2.5 + item.x*0.1) * ss(1)
+    drawObject(item.type, cx, cy + bobOffset, s)
+    vc.shadowBlur = 0
   })
 
   g.enemies.forEach(e => { if (e.hp > 0) drawEnemy(e, g.cameraX) })
@@ -1251,12 +1531,17 @@ function levelCfg(g) { return LEVEL_CONFIG[Math.min(g.level, LEVEL_CONFIG.length
 
 // ── SPAWN INTERACTABLE ────────────────────────────────────────
 const SPAWN_TYPES = [
-  {type:'toy',   color:'#FF69B4', w:10, h:12, points:10, chaosAdd:6,  label:'TOY'},
-  {type:'juice', color:'#FF8C00', w:8,  h:14, points:15, chaosAdd:9,  label:'JCE'},
-  {type:'toy',   color:'#87CEEB', w:11, h:11, points:10, chaosAdd:6,  label:'BLK'},
-  {type:'alarm', color:'#FF0000', w:10, h:18, points:25, chaosAdd:14, label:'ALM'},
-  {type:'toy',   color:'#F1C40F', w:13, h:10, points:12, chaosAdd:7,  label:'BK'},
-  {type:'speaker',color:'#9B59B6',w:14, h:12, points:20, chaosAdd:11, label:'SPK'},
+  {type:'toy',     color:'#8B4513', w:12, h:10, points:10, chaosAdd:6,  label:''},
+  {type:'juice',   color:'#FF69B4', w:6,  h:12, points:15, chaosAdd:9,  label:''},
+  {type:'teddy',   color:'#CD853F', w:10, h:14, points:12, chaosAdd:7,  label:''},
+  {type:'alarm',   color:'#FF0000', w:7,  h:12, points:25, chaosAdd:14, label:''},
+  {type:'blocks',  color:'#E74C3C', w:10, h:11, points:12, chaosAdd:7,  label:''},
+  {type:'speaker', color:'#2C3E50', w:10, h:10, points:20, chaosAdd:11, label:''},
+  {type:'lamp',    color:'#F39C12', w:8,  h:14, points:18, chaosAdd:10, label:''},
+  {type:'remote',  color:'#2C3E50', w:5,  h:11, points:10, chaosAdd:6,  label:''},
+  {type:'picture', color:'#8B4513', w:12, h:9,  points:15, chaosAdd:8,  label:''},
+  {type:'ball',    color:'#FFF',    w:8,  h:8,  points:8,  chaosAdd:5,  label:''},
+  {type:'fish',    color:'#4A90D9', w:14, h:10, points:20, chaosAdd:10, label:''},
 ]
 
 function spawnInteractable(g) {
