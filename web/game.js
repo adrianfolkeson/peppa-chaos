@@ -653,9 +653,6 @@ function drawBoss(b, cameraX) {
   vc.fillStyle = '#FF3333'
   vc.fillRect(bx - bw/2, by - s/2 - 8, Math.round(bw * (b.hp / b.maxHp)), 4)
 
-  vc.fillStyle = '#FFF'
-  vc.font = '4px monospace'; vc.textAlign = 'center'
-  vc.fillText('CHAOS MAMA', bx, by - s/2 - 11)
   vc.textAlign = 'left'
 }
 
