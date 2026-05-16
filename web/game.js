@@ -435,89 +435,33 @@ function drawPlayer(g) {
   const skin = SKINS[g.skin] || SKINS['default']
   let bc = skin.color
   if (bc === 'rainbow') bc = `hsl(${(Date.now()/8)%360},100%,60%)`
-  const flip = !g.facingRight
 
-  // Virtual sprite center (slightly above hitbox center)
   const vcx = g.x - g.cameraX + PLAYER_W/2
   const vcy = g.y + PLAYER_H/2
-  // Screen coords
   const cx = spx(vcx), cy = spy(vcy)
-  const s = _S
-
-  // Bob when walking
-  const bobV = g.onGround && Math.abs(g.vx) > 0.3 ? Math.sin(g.animFrame * 0.8) : 0
-  const bob  = ss(bobV * 0.8)
-
-  vc.save()
-  if (flip) { vc.translate(cx, 0); vc.scale(-1, 1); vc.translate(-cx, 0) }
-  vc.shadowColor = bc; vc.shadowBlur = ss(10)
 
   // Ground shadow
   vc.fillStyle = 'rgba(0,0,0,0.22)'
-  vc.beginPath(); vc.ellipse(cx, spy(g.y + PLAYER_H) + ss(1), ss(8), ss(2.5), 0, 0, Math.PI*2); vc.fill()
-  vc.shadowBlur = ss(8)
-
-  // Legs (animated)
-  vc.fillStyle = bc
-  const walk = Math.floor(g.animFrame % 4)
-  if (!g.onGround) {
-    vc.fillRect(Math.round(cx-ss(4)), Math.round(cy+ss(6)+bob), ss(3.5), ss(5))
-    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(6)+bob), ss(3.5), ss(5))
-  } else if (walk < 2) {
-    vc.fillRect(Math.round(cx-ss(5)), Math.round(cy+ss(5)+bob), ss(3.5), ss(7))
-    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(5)+bob), ss(3.5), ss(4))
-  } else {
-    vc.fillRect(Math.round(cx-ss(5)), Math.round(cy+ss(5)+bob), ss(3.5), ss(4))
-    vc.fillRect(Math.round(cx+ss(1)), Math.round(cy+ss(5)+bob), ss(3.5), ss(7))
-  }
-
-  // Body (oval)
-  vc.fillStyle = bc
-  vc.beginPath(); vc.ellipse(cx, cy+ss(2)+bob, ss(6), ss(8), 0, 0, Math.PI*2); vc.fill()
-
-  // Head (circle)
-  vc.beginPath(); vc.arc(cx, cy-ss(7)+bob, ss(7), 0, Math.PI*2); vc.fill()
-
-  // Ears (ovals, slightly angled)
-  vc.beginPath(); vc.ellipse(cx-ss(6), cy-ss(13)+bob, ss(3), ss(5), -0.25, 0, Math.PI*2); vc.fill()
-  vc.beginPath(); vc.ellipse(cx+ss(6), cy-ss(13)+bob, ss(3), ss(5),  0.25, 0, Math.PI*2); vc.fill()
-  // Inner ear
-  vc.fillStyle = '#FFB6C1'
-  vc.beginPath(); vc.ellipse(cx-ss(6), cy-ss(13)+bob, ss(1.5), ss(2.8), -0.25, 0, Math.PI*2); vc.fill()
-  vc.beginPath(); vc.ellipse(cx+ss(6), cy-ss(13)+bob, ss(1.5), ss(2.8),  0.25, 0, Math.PI*2); vc.fill()
-
-  // Snout (oval)
-  vc.fillStyle = '#FFB6C1'
-  vc.beginPath(); vc.ellipse(cx+ss(3), cy-ss(5.5)+bob, ss(4), ss(3), 0, 0, Math.PI*2); vc.fill()
-  // Nostrils
-  vc.fillStyle = '#CC6688'
-  vc.beginPath(); vc.ellipse(cx+ss(2), cy-ss(5.5)+bob, ss(1), ss(0.9), 0, 0, Math.PI*2); vc.fill()
-  vc.beginPath(); vc.ellipse(cx+ss(4.5), cy-ss(5.5)+bob, ss(1), ss(0.9), 0, 0, Math.PI*2); vc.fill()
-
-  // Eyes (white + pupil)
-  vc.fillStyle = '#FFF'
-  vc.beginPath(); vc.ellipse(cx-ss(1.5), cy-ss(8.5)+bob, ss(2.5), ss(3.2), 0, 0, Math.PI*2); vc.fill()
-  vc.beginPath(); vc.ellipse(cx+ss(3.5), cy-ss(8.5)+bob, ss(2.5), ss(3.2), 0, 0, Math.PI*2); vc.fill()
-  vc.fillStyle = '#111'
-  vc.beginPath(); vc.arc(cx-ss(0.8), cy-ss(8.5)+bob, ss(1.3), 0, Math.PI*2); vc.fill()
-  vc.beginPath(); vc.arc(cx+ss(4.2), cy-ss(8.5)+bob, ss(1.3), 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx, spy(g.y+PLAYER_H)+ss(1), ss(9), ss(3), 0, 0, Math.PI*2); vc.fill()
 
   // Chaos aura
   if (g.chaos > 50) {
     const gp = (g.chaos-50)/50
     vc.globalAlpha = gp*0.35*(0.6+0.4*Math.sin(menuTime*8))
     vc.fillStyle = g.chaos>75 ? '#FF0000' : '#9B59B6'
-    vc.beginPath(); vc.ellipse(cx, cy-ss(3)+bob, ss(12), ss(16), 0, 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.ellipse(cx, cy, ss(13), ss(18), 0, 0, Math.PI*2); vc.fill()
     vc.globalAlpha = 1
   }
 
-  vc.restore()
+  // Simple pink oval — clean and readable
+  vc.fillStyle = bc
+  vc.shadowColor = bc; vc.shadowBlur = ss(12)
+  vc.beginPath(); vc.ellipse(cx, cy, ss(8), ss(11), 0, 0, Math.PI*2); vc.fill()
+  vc.shadowBlur = 0
 
   // Trail particles
   if (Math.abs(g.vx) > 0.8 && Math.random() > 0.4)
     spawnParticle(vcx+(Math.random()-0.5)*4, g.y+PLAYER_H-2, bc, (Math.random()-0.5)*0.4, -0.2, 0.25+Math.random()*0.2, 1)
-  if (!g.onGround && g.vy < -3 && Math.random() > 0.5)
-    spawnParticle(vcx, g.y+PLAYER_H, '#00FFFF', (Math.random()-0.5)*1.5, Math.random()*0.5, 0.2, 1)
 }
 
 // ── 8. ENEMY SYSTEM ──────────────────────────────────────────
