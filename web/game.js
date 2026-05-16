@@ -421,69 +421,103 @@ function drawMenuBg() {
 // ── PLAYER DRAW ──────────────────────────────────────────────
 function drawPlayer(g) {
   if (g.invincible > 0 && Math.floor(g.invincible * 10) % 2 === 0) return
-  const px = Math.round(g.x - g.cameraX), py = Math.round(g.y)
-  const w = PLAYER_W, h = PLAYER_H
+  const hx = Math.round(g.x - g.cameraX)  // hitbox x
+  const hy = Math.round(g.y)               // hitbox y
   const skin = SKINS[g.skin] || SKINS['default']
   const bc = skin.color, dc = skin.darkColor
   const flip = !g.facingRight
 
+  // Draw bigger sprite (18×24) centered on hitbox
+  const pw = 18, ph = 24
+  const px = hx - (pw - PLAYER_W) / 2
+  const py = hy - (ph - PLAYER_H)
+
+  // Bob animation when moving
+  const bob = g.onGround && Math.abs(g.vx) > 0.3 ? Math.sin(g.animFrame * 0.8) * 1 : 0
+
   vc.save()
-  if (flip) { vc.translate(px + w/2, 0); vc.scale(-1, 1); vc.translate(-(px + w/2), 0) }
+  if (flip) { vc.translate(px + pw/2, 0); vc.scale(-1,1); vc.translate(-(px+pw/2),0) }
 
-  // Body shadow
-  vc.fillStyle = 'rgba(0,0,0,0.25)'; vc.fillRect(px + 2, py + h - 1, w - 2, 2)
+  // Ground shadow
+  vc.fillStyle = 'rgba(0,0,0,0.30)'
+  vc.fillRect(px+2, hy+PLAYER_H-1, pw-4, 2)
 
-  // Legs (animated walk cycle)
-  const walk = Math.floor(g.animFrame % 4); vc.fillStyle = dc
+  // Legs
+  const walk = Math.floor(g.animFrame % 4)
+  vc.fillStyle = dc
+  const legY = py + ph + bob
   if (!g.onGround) {
-    vc.fillRect(px + 1, py + h - 3, 3, 3); vc.fillRect(px + 6, py + h - 3, 3, 3)
+    // tucked up
+    vc.fillRect(px+3,  legY-4, 4, 3)
+    vc.fillRect(px+11, legY-4, 4, 3)
   } else if (walk < 2) {
-    vc.fillRect(px, py + h - 2, 3, 4); vc.fillRect(px + 7, py + h - 4, 3, 2)
+    vc.fillRect(px+2,  legY-2, 4, 5)
+    vc.fillRect(px+12, legY-4, 4, 3)
   } else {
-    vc.fillRect(px + 1, py + h - 4, 3, 2); vc.fillRect(px + 6, py + h - 2, 3, 4)
+    vc.fillRect(px+2,  legY-4, 4, 3)
+    vc.fillRect(px+12, legY-2, 4, 5)
   }
 
-  // Body
+  // Body — oval shape (wider than tall)
   vc.fillStyle = bc
-  vc.fillRect(px + 1, py + 5, w - 2, h - 6)
+  vc.fillRect(px+2, py+12+bob, pw-4, 10)    // body core
+  vc.fillRect(px+1, py+13+bob, pw-2, 8)     // body wider middle
+  vc.fillRect(px+3, py+11+bob, pw-6, 11)    // smooth oval
 
-  // Head
-  vc.fillRect(px + 1, py + 1, w - 2, 5)
-  vc.fillRect(px + 2, py, w - 4, 2)
-
-  // Ears
-  vc.fillRect(px, py - 2, 3, 3); vc.fillRect(px + 7, py - 2, 3, 3)
-  vc.fillStyle = '#FFB6C1'
-  vc.fillRect(px + 1, py - 1, 1, 2); vc.fillRect(px + 8, py - 1, 1, 2)
-
-  // Snout
-  vc.fillStyle = '#FFB6C1'
-  vc.fillRect(px + 6, py + 2, 4, 3)
-
-  // Nostrils
-  vc.fillStyle = dc
-  vc.fillRect(px + 7, py + 3, 1, 1); vc.fillRect(px + 9, py + 3, 1, 1)
-
-  // Eyes
-  vc.fillStyle = '#FFFFFF'
-  vc.fillRect(px + 2, py + 1, 3, 3); vc.fillRect(px + 6, py + 1, 3, 3)
-  vc.fillStyle = '#111111'
-  vc.fillRect(px + 3, py + 2, 2, 2); vc.fillRect(px + 7, py + 2, 2, 2)
-
-  // Chaos glow aura
+  // Chaos aura (behind body)
   if (g.chaos > 50) {
-    const glowPct = (g.chaos - 50) / 50
-    vc.globalAlpha = glowPct * 0.35 * (0.7 + 0.3 * Math.sin(menuTime * 6))
+    const glowPct = (g.chaos-50)/50
+    vc.globalAlpha = glowPct * 0.40 * (0.6+0.4*Math.sin(menuTime*8))
     vc.fillStyle = g.chaos > 75 ? '#FF0000' : '#9B59B6'
-    vc.fillRect(px - 2, py - 3, w + 4, h + 5)
+    vc.fillRect(px-3, py+bob-2, pw+6, ph+6)
     vc.globalAlpha = 1
   }
 
+  // Head — circle on top of body
+  vc.fillStyle = bc
+  vc.fillRect(px+3,  py+2+bob,  pw-6, 12)   // head core
+  vc.fillRect(px+4,  py+1+bob,  pw-8, 13)   // head rounded
+  vc.fillRect(px+2,  py+4+bob,  pw-4, 9)    // head wider
+
+  // Ears — triangular (2 rects making a triangle shape)
+  vc.fillStyle = bc
+  vc.fillRect(px+3,  py-3+bob,  5, 5)        // left ear
+  vc.fillRect(px+10, py-3+bob,  5, 5)        // right ear
+  vc.fillStyle = '#FFB6C1'
+  vc.fillRect(px+4,  py-2+bob,  2, 3)        // left ear inner
+  vc.fillRect(px+11, py-2+bob,  2, 3)        // right ear inner
+
+  // Snout — oval protruding right side of face
+  vc.fillStyle = '#FFB6C1'
+  vc.fillRect(px+12, py+7+bob,  6, 5)        // snout oval
+  vc.fillRect(px+11, py+8+bob,  7, 3)        // snout wider
+
+  // Nostrils
+  vc.fillStyle = dc
+  vc.fillRect(px+13, py+8+bob, 2, 2)
+  vc.fillRect(px+16, py+8+bob, 2, 2)
+
+  // Eyes — white with black pupil, looking right
+  vc.fillStyle = '#FFFFFF'
+  vc.fillRect(px+5,  py+4+bob, 4, 4)         // left eye
+  vc.fillRect(px+9,  py+4+bob, 4, 4)         // right eye (towards snout)
+  vc.fillStyle = '#111111'
+  vc.fillRect(px+7,  py+5+bob, 2, 2)         // left pupil (look right)
+  vc.fillRect(px+11, py+5+bob, 2, 2)         // right pupil
+
+  // Mouth — tiny smile
+  vc.fillStyle = dc
+  vc.fillRect(px+9,  py+10+bob, 3, 1)
+
   vc.restore()
 
-  // Trail when moving fast
-  if (Math.abs(g.vx) > 1 && g.onGround && save.settings && Math.random() > 0.5) {
-    spawnParticle(px + w/2, py + h - 2, skin.color, (Math.random() - 0.5) * 0.5, -0.3, 0.3, 1)
+  // Trail particles when moving
+  if (Math.abs(g.vx) > 0.8 && Math.random() > 0.4) {
+    spawnParticle(px+pw/2, py+ph-4+bob, bc, (Math.random()-0.5)*0.4, -0.2, 0.25+Math.random()*0.2, 1)
+  }
+  // Jump sparkle
+  if (!g.onGround && g.vy < -3 && Math.random() > 0.5) {
+    spawnParticle(px+pw/2, py+ph+bob, '#00FFFF', (Math.random()-0.5)*1.5, Math.random()*0.5, 0.2, 1)
   }
 }
 
@@ -746,52 +780,73 @@ function checkObjectives(g) {
 // ── 12. CHAOS METER ──────────────────────────────────────────
 function drawChaosBar(g) {
   const pct = g.chaos / 100
-  const bx = VW/2 - 40, by = 2, bw = 80, bh = 8
-  vc.fillStyle = 'rgba(0,0,0,0.6)'; vc.fillRect(bx - 1, by - 1, bw + 2, bh + 2)
-  const col = pct < 0.25 ? '#2ECC71' : pct < 0.5 ? '#F1C40F' : pct < 0.75 ? '#E67E22' : '#E74C3C'
-  const pulse = g.chaos > 75 ? 0.7 + 0.3 * Math.sin(menuTime * 8) : 1
+  const bx = VW/2 - 45, by = 2, bw = 90, bh = 8
+  // Background
+  vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(bx-1, by-1, bw+2, bh+4)
+  // Gradient fill (green→yellow→orange→red)
+  const col = pct<0.25?'#2ECC71':pct<0.5?'#F1C40F':pct<0.75?'#E67E22':'#E74C3C'
+  const pulse = g.chaos>75 ? 0.7+0.3*Math.sin(menuTime*10) : 1
   vc.save()
-  if (g.chaos > 75) { vc.shadowColor = col; vc.shadowBlur = 8 * pulse }
-  vc.fillStyle = col; vc.fillRect(bx, by, Math.round(bw * pct), bh)
-  vc.strokeStyle = g.chaos > 75 ? col : 'rgba(150,0,255,0.8)'; vc.lineWidth = 0.5
+  if (g.chaos>75) { vc.shadowColor=col; vc.shadowBlur=6*pulse }
+  vc.fillStyle=col; vc.fillRect(bx, by, Math.round(bw*pct), bh)
+  // Shine strip on top
+  vc.fillStyle='rgba(255,255,255,0.25)'; vc.fillRect(bx, by, Math.round(bw*pct), 2)
+  // Neon border — purple normally, red when danger
+  vc.shadowColor=g.chaos>75?col:'#9B59B6'; vc.shadowBlur=g.chaos>75?6:3
+  vc.strokeStyle=g.chaos>75?col:'#9B59B6'; vc.lineWidth=0.75
   vc.strokeRect(bx, by, bw, bh)
-  vc.shadowBlur = 0; vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'center'
-  vc.fillText('CHAOS ' + Math.round(g.chaos) + '%', VW/2, by + bh + 5)
-  if (g.chaos >= 100) {
-    const wig = Math.floor(menuTime * 20) % 2 === 0 ? 0 : 1
-    vc.fillStyle = 'rgba(255,0,0,' + (0.4 + 0.3 * Math.sin(menuTime * 10)) + ')'
-    vc.fillRect(wig, 18, VW, 10)
-    vc.fillStyle = '#FFF'; vc.font = '6px monospace'
-    vc.fillText('ESCAPE NOW!', VW/2 + wig, 25)
+  vc.shadowBlur=0
+  // Label
+  vc.fillStyle='#FFF'; vc.font='4px monospace'; vc.textAlign='center'
+  vc.fillText('CHAOS '+Math.round(g.chaos)+'%', VW/2, by+bh+5)
+  // Escape warning banner at 100%
+  if (g.chaos>=100) {
+    const wig=Math.floor(menuTime*20)%2===0?0:1
+    vc.fillStyle=`rgba(200,0,0,${0.5+0.3*Math.sin(menuTime*12)})`
+    vc.fillRect(0, 17, VW, 11)
+    vc.shadowColor='#FF0000'; vc.shadowBlur=4
+    vc.fillStyle='#FFF'; vc.font='7px monospace'
+    vc.fillText('ESCAPE NOW!', VW/2+wig, 25)
+    vc.shadowBlur=0
   }
   vc.restore()
 }
 
 // ── 13. HUD ──────────────────────────────────────────────────
-function drawHUD(g) {
-  // Top-left: score + coins panel
-  vc.font = '5px monospace'; vc.textAlign = 'left'
-  vc.fillStyle = 'rgba(0,0,0,0.5)'; vc.fillRect(2, 2, 70, 20)
-  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 6
-  vc.fillStyle = 'rgba(255,255,255,0.6)'; vc.fillText('SCORE', 5, 10)
-  vc.fillStyle = '#00FFFF'; vc.font = '6px monospace'
-  vc.fillText(g.score.toLocaleString(), 5, 18)
-  vc.shadowBlur = 0
-  vc.fillStyle = '#F1C40F'; vc.font = '5px monospace'
-  vc.fillText('$ ' + g.coins, 5, 26)
+function hudPanel(x, y, w, h, borderCol) {
+  vc.fillStyle='rgba(0,0,15,0.72)'; vc.fillRect(x,y,w,h)
+  vc.shadowColor=borderCol; vc.shadowBlur=4
+  vc.strokeStyle=borderCol; vc.lineWidth=0.75; vc.strokeRect(x,y,w,h)
+  // top shine
+  vc.fillStyle='rgba(255,255,255,0.08)'; vc.fillRect(x,y,w,2)
+  vc.shadowBlur=0
+}
 
-  // Top-right: level + timer
-  vc.textAlign = 'right'
-  vc.fillStyle = 'rgba(0,0,0,0.5)'; vc.fillRect(VW - 72, 2, 70, 20)
-  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 6; vc.fillStyle = '#FF69B4'
-  vc.font = '5px monospace'
-  vc.fillText('LV.' + (g.level + 1), VW - 5, 10)
-  vc.shadowBlur = 0; vc.fillStyle = 'rgba(255,255,255,0.7)'; vc.font = '4px monospace'
-  vc.fillText(LEVELS[g.level].name.substring(0, 14), VW - 5, 18)
-  const timeLeft = Math.max(0, LEVELS[g.level].duration - g.time)
-  const timerBlink = timeLeft < 5 && Math.floor(menuTime * 4) % 2 === 0
-  const timerCol = timeLeft < 15 ? (timerBlink ? '#FF0000' : '#FF4400') : '#FFF'
-  vc.fillStyle = timerCol; vc.fillText(Math.ceil(timeLeft) + 's', VW - 5, 26)
+function drawHUD(g) {
+  // Top-left: score + coins — neon CYAN panel
+  hudPanel(2, 2, 68, 24, '#00FFFF')
+  vc.font='4px monospace'; vc.textAlign='left'
+  vc.fillStyle='rgba(255,255,255,0.5)'; vc.fillText('SCORE', 5, 10)
+  vc.shadowColor='#00FFFF'; vc.shadowBlur=5
+  vc.fillStyle='#00FFFF'; vc.font='6px monospace'
+  vc.fillText(g.score.toLocaleString(), 5, 18)
+  vc.shadowBlur=0
+  vc.fillStyle='#F1C40F'; vc.font='4px monospace'
+  vc.fillText('$ '+g.coins, 5, 25)
+
+  // Top-right: level name + timer — neon PINK panel
+  hudPanel(VW-70, 2, 68, 24, '#FF69B4')
+  vc.textAlign='right'
+  vc.shadowColor='#FF69B4'; vc.shadowBlur=5
+  vc.fillStyle='#FF69B4'; vc.font='5px monospace'
+  vc.fillText('LV.'+(g.level+1)+' '+LEVELS[g.level].name.substring(0,8), VW-5, 10)
+  vc.shadowBlur=0
+  vc.fillStyle='rgba(255,255,255,0.6)'; vc.font='4px monospace'
+  vc.fillText(LEVELS[g.level].name.substring(0,14), VW-5, 17)
+  const timeLeft=Math.max(0,LEVELS[g.level].duration-g.time)
+  const timerBlink=timeLeft<5&&Math.floor(menuTime*4)%2===0
+  const timerCol=timeLeft<15?(timerBlink?'#FF0000':'#FF5500'):'#FFF'
+  vc.fillStyle=timerCol; vc.fillText(Math.ceil(timeLeft)+'s', VW-5, 24)
 
   // Chaos bar — center top
   drawChaosBar(g)
@@ -977,10 +1032,31 @@ function drawLevel(g) {
 
   drawBackground(g, lvl)
 
+  // Floating background particles (draw in game world too)
+  bgParticles.forEach(p => {
+    vc.globalAlpha = 0.35
+    vc.fillStyle = p.c
+    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
+    vc.globalAlpha = 1
+  })
+
   g.platforms.forEach(p => {
     const px = Math.round(p.x - g.cameraX)
+    // Dark platform fill
     vc.fillStyle = p.c; vc.fillRect(px, p.y, p.w, p.h)
-    vc.fillStyle = lightenColor(p.c); vc.fillRect(px, p.y, p.w, 1)
+    // Neon grid on ground/platforms
+    vc.fillStyle = 'rgba(0,255,255,0.12)'
+    const gridOff = Math.floor(g.cameraX) % 10
+    for (let gx = px - gridOff; gx < px + p.w; gx += 10) {
+      vc.fillRect(gx, p.y, 1, p.h)
+    }
+    for (let gy = p.y; gy < p.y + p.h; gy += 6) {
+      vc.fillRect(px, gy, p.w, 1)
+    }
+    // Top edge highlight (neon)
+    vc.fillStyle = 'rgba(255,0,255,0.6)'; vc.fillRect(px, p.y, p.w, 1)
+    // Second top line — cyan
+    vc.fillStyle = 'rgba(0,255,255,0.25)'; vc.fillRect(px, p.y+1, p.w, 1)
   })
 
   g.interactables.forEach(item => {
