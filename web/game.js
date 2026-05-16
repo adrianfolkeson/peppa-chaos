@@ -437,27 +437,60 @@ function drawPlayer(g) {
   if (bc === 'rainbow') bc = `hsl(${(Date.now()/8)%360},100%,60%)`
 
   const vcx = g.x - g.cameraX + PLAYER_W/2
-  const vcy = g.y + PLAYER_H/2
-  const cx = spx(vcx), cy = spy(vcy)
+  // Use foot position as reference (like the spec's y = bottom of player)
+  const py = spy(g.y + PLAYER_H)
+  const cx = spx(vcx)
 
   // Ground shadow
-  vc.fillStyle = 'rgba(0,0,0,0.22)'
-  vc.beginPath(); vc.ellipse(cx, spy(g.y+PLAYER_H)+ss(1), ss(9), ss(3), 0, 0, Math.PI*2); vc.fill()
+  vc.fillStyle = 'rgba(0,0,0,0.20)'
+  vc.beginPath(); vc.ellipse(cx, py+ss(2), ss(6), ss(2), 0, 0, Math.PI*2); vc.fill()
 
-  // Chaos aura
+  // Chaos aura (behind character)
   if (g.chaos > 50) {
     const gp = (g.chaos-50)/50
-    vc.globalAlpha = gp*0.35*(0.6+0.4*Math.sin(menuTime*8))
+    vc.globalAlpha = gp*0.32*(0.6+0.4*Math.sin(menuTime*8))
     vc.fillStyle = g.chaos>75 ? '#FF0000' : '#9B59B6'
-    vc.beginPath(); vc.ellipse(cx, cy, ss(13), ss(18), 0, 0, Math.PI*2); vc.fill()
+    vc.beginPath(); vc.ellipse(cx, py-ss(8), ss(10), ss(15), 0, 0, Math.PI*2); vc.fill()
     vc.globalAlpha = 1
   }
 
-  // Simple pink oval — clean and readable
   vc.fillStyle = bc
-  vc.shadowColor = bc; vc.shadowBlur = ss(12)
-  vc.beginPath(); vc.ellipse(cx, cy, ss(8), ss(11), 0, 0, Math.PI*2); vc.fill()
+  vc.shadowColor = bc; vc.shadowBlur = ss(5)
+
+  // LEGS
+  vc.fillRect(Math.round(cx-ss(3)), Math.round(py), ss(2), ss(4))
+  vc.fillRect(Math.round(cx+ss(1)), Math.round(py), ss(2), ss(4))
+
+  // BODY oval
+  vc.beginPath(); vc.ellipse(cx, py-ss(2), ss(5), ss(7), 0, 0, Math.PI*2); vc.fill()
+
+  // HEAD
+  vc.beginPath(); vc.arc(cx, py-ss(11), ss(6), 0, Math.PI*2); vc.fill()
+
+  // EARS (angled ovals)
+  vc.beginPath(); vc.ellipse(cx-ss(5), py-ss(16), ss(2.5), ss(4), -0.4, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(5), py-ss(16), ss(2.5), ss(4),  0.4, 0, Math.PI*2); vc.fill()
+
+  // SNOUT (lighter pink)
+  vc.fillStyle = '#FFB6C1'
   vc.shadowBlur = 0
+  vc.beginPath(); vc.ellipse(cx, py-ss(9), ss(4), ss(3), 0, 0, Math.PI*2); vc.fill()
+
+  // NOSTRILS
+  vc.fillStyle = '#FF69B4'
+  vc.beginPath(); vc.ellipse(cx-ss(1.5), py-ss(9), ss(1), ss(0.8), 0, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(1.5), py-ss(9), ss(1), ss(0.8), 0, 0, Math.PI*2); vc.fill()
+
+  // EYES (white ovals)
+  vc.fillStyle = '#FFF'
+  const lookDir = g.facingRight ? ss(0.5) : -ss(0.5)
+  vc.beginPath(); vc.ellipse(cx-ss(2.2)+lookDir, py-ss(12.5), ss(2), ss(2.8), 0, 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.ellipse(cx+ss(2.2)+lookDir, py-ss(12.5), ss(2), ss(2.8), 0, 0, Math.PI*2); vc.fill()
+
+  // PUPILS
+  vc.fillStyle = '#000'
+  vc.beginPath(); vc.arc(cx-ss(2.2)+lookDir*1.5, py-ss(12.5), ss(1), 0, Math.PI*2); vc.fill()
+  vc.beginPath(); vc.arc(cx+ss(2.2)+lookDir*1.5, py-ss(12.5), ss(1), 0, Math.PI*2); vc.fill()
 
   // Trail particles
   if (Math.abs(g.vx) > 0.8 && Math.random() > 0.4)
