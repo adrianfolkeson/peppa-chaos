@@ -361,6 +361,8 @@ function initGame(levelIdx) {
     dead: false, deathTimer: 0,
     deathReason: 'GROUNDED!',
     escaped: false,
+    escapeActive: false,
+    escapeTimer: 30,    // seconds to reach exit once chaos=100%
     bossSpawned: false, bossDefeated: false,
     boss: null,
     shakeX: 0, shakeY: 0, shakeDur: 0,
@@ -864,6 +866,23 @@ function drawHUD(g) {
     vc.fillText((obj.done?'✓ ':'· ')+obj.text.substring(0,16), _SOX+ss(VW_BASE)-ss(2), _SOY+ss(VH_BASE)-ss(16)+i*ss(7))
   })
 
+  // Escape countdown HUD
+  if (g.escapeActive && !g.escaped && !g.dead) {
+    const etLeft = Math.ceil(Math.max(0, g.escapeTimer))
+    const etCol = etLeft < 10 ? (Math.floor(menuTime*6)%2===0?'#FF0000':'#FF6600') : '#00FFFF'
+    const etFs = Math.max(10, ss(5))
+    const etW = ss(80), etH = ss(13)
+    const etX = canvas.width/2 - etW/2, etY = _SOY + ss(14)
+    vc.fillStyle = 'rgba(0,0,0,0.75)'; vc.fillRect(etX, etY, etW, etH)
+    vc.shadowColor = etCol; vc.shadowBlur = ss(8)
+    vc.fillStyle = etCol; vc.font = `bold ${etFs}px monospace`; vc.textAlign = 'center'
+    vc.fillText(`REACH EXIT: ${etLeft}s`, canvas.width/2, etY + etH*0.75)
+    vc.shadowBlur = 0
+    // Arrow pointing right toward exit
+    vc.fillStyle = '#00FFFF'; vc.font = `${Math.max(8,ss(6))}px monospace`
+    vc.fillText('→ →', _SOX + ss(VW-20), etY + etH*0.75)
+  }
+
   // Boss hint
   if (g.level===5 && !g.bossSpawned) {
     vc.fillStyle='#FFD700'; vc.textAlign='center'; vc.font=`${Math.max(9,ss(5))}px monospace`
@@ -1073,17 +1092,36 @@ function drawLevel(g) {
   drawPlayer(g)
   drawParticles()
 
-  // Escape zone
-  const canEscape = g.objectivesCompleted >= g.objectives.length || g.chaos >= 90 || g.bossDefeated
-  if (canEscape) {
-    const ez = spx(g.escapeX - g.cameraX), ezy = spy(g.escapeY - 30)
-    const ezw = ss(14), ezh = ss(30)
-    vc.fillStyle = `rgba(0,255,0,${0.3+0.2*Math.sin(menuTime*8)})`
+  // Escape door — always draw but much more prominent when escapeActive
+  const canEscapeDraw = g.escapeActive || g.objectivesCompleted >= g.objectives.length || g.bossDefeated || g.chaos >= 90
+  if (canEscapeDraw) {
+    const ez = spx(g.escapeX - g.cameraX), ezy = spy(g.escapeY - 38)
+    const ezw = ss(18), ezh = ss(38)
+    const pulse = 0.6 + 0.4*Math.abs(Math.sin(menuTime * (g.escapeActive ? 6 : 3)))
+    const doorCol = g.escapeActive ? '#00FFFF' : '#00FF88'
+    // Door fill
+    vc.fillStyle = `rgba(0,${g.escapeActive?200:180},${g.escapeActive?255:100},${0.25*pulse})`
     vc.fillRect(ez, ezy, ezw, ezh)
-    const fs = Math.max(8, ss(5))
-    vc.fillStyle = '#00FF00'; vc.font = `${fs}px monospace`; vc.textAlign = 'center'
-    vc.fillText('EXIT', ez+ezw/2, ezy-ss(4))
-    vc.textAlign = 'left'
+    // Door border glow
+    vc.shadowColor = doorCol; vc.shadowBlur = ss(g.escapeActive ? 14 : 6)
+    vc.strokeStyle = doorCol; vc.lineWidth = Math.max(1.5, ss(1.5))
+    vc.strokeRect(ez, ezy, ezw, ezh)
+    vc.shadowBlur = 0
+    // Shine strip
+    vc.fillStyle = `rgba(255,255,255,${0.15*pulse})`; vc.fillRect(ez, ezy, ss(3), ezh)
+    // Label
+    const dfs = Math.max(8, ss(4))
+    vc.fillStyle = doorCol; vc.font = `bold ${dfs}px monospace`; vc.textAlign = 'center'
+    vc.shadowColor = doorCol; vc.shadowBlur = ss(6)
+    vc.fillText('EXIT', ez+ezw/2, ezy-ss(3))
+    // Arrow pointing to door when active
+    if (g.escapeActive) {
+      vc.fillStyle = '#00FFFF'
+      vc.fillText('→', ez+ezw/2, ezy-ss(10))
+      // Particle sparkles around door
+      if (Math.random() > 0.5) spawnParticle(g.escapeX-g.cameraX+(Math.random()-0.5)*10, g.escapeY-20+Math.random()*20, '#00FFFF', (Math.random()-0.5)*0.5, -0.8, 0.4, 1)
+    }
+    vc.shadowBlur = 0; vc.textAlign = 'left'
   }
 }
 
@@ -1178,9 +1216,35 @@ function update(dt) {
     triggerShakeG(g, 6, 0.8)
   }
 
+  // ── Escape system ─────────────────────────────────────────────
+  // Activate escape mode at 100% chaos
+  if (g.chaos >= 100 && !g.escapeActive && !g.dead) {
+    g.escapeActive = true
+    g.escapeTimer  = 30
+    sfxAlarm()
+    triggerShakeG(g, 5, 0.6)
+    spawnBurst(g.escapeX - g.cameraX, g.escapeY - 20, '#00FFFF', 20)
+    if (!g.scorePopups) g.scorePopups = []
+    g.scorePopups.push({ text: 'ESCAPE NOW!', color: '#FF0000', x: VW/2, y: VH/2 - 20, life: 2.0, vy: -0.2 })
+  }
+  // Count down and kill if time expires
+  if (g.escapeActive && !g.escaped && !g.dead) {
+    g.escapeTimer -= dt
+    // Alarm flash every second when < 10s
+    if (g.escapeTimer < 10 && Math.floor(g.escapeTimer * 2) % 2 === 0) {
+      g.flashColor = '#FF0000'; g.flashTimer = 0.08
+    }
+    if (g.escapeTimer <= 0) {
+      g.dead = true
+      g.deathReason = 'GROUNDED FOREVER!'
+      sfxCrash()
+      triggerShakeG(g, 8, 1.0)
+    }
+  }
+
   // Escape check — use world coords
   const escX = g.escapeX
-  const canEscape = g.objectivesCompleted >= g.objectives.length || g.chaos >= 90 || g.bossDefeated
+  const canEscape = g.escapeActive || g.objectivesCompleted >= g.objectives.length || g.bossDefeated
   if (canEscape && Math.abs(g.x - escX) < 20 && Math.abs(g.y + PLAYER_H - g.escapeY) < 20) {
     g.escaped = true
     save.highScores[g.level] = Math.max(save.highScores[g.level], g.score)
