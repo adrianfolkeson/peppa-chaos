@@ -371,6 +371,10 @@ function initGame(levelIdx) {
     nextRandomEvent: 8,
     nearItem: null,
     scorePopups: [],
+    spawnTimer:  3,      // countdown to next object spawn
+    comboCount:  0,
+    comboTimer:  0,
+    enemySpawnChaos: 0,  // last chaos level we spawned extra enemies at
   }
 }
 
@@ -724,21 +728,30 @@ function doAction(g) {
   if (!g.nearItem || g.nearItem.broken) return
   const item = g.nearItem
   item.broken = true
-  g.score += item.points
-  g.coins += Math.ceil(item.points / 5)
+
+  // Combo system — chain breaks within 3s for multiplier
+  g.comboCount++
+  g.comboTimer = 3.0
+  const multi = Math.min(g.comboCount, 5)
+  const pts = item.points * multi
+  const coins = Math.ceil(pts / 5)
+
+  g.score += pts
+  g.coins += coins
   g.chaos  = Math.min(100, g.chaos + item.chaosAdd)
-  spawnBurst(item.x - g.cameraX + item.w/2, item.y + item.h/2, C.PINK, 12)
+  spawnBurst(item.x - g.cameraX + item.w/2, item.y + item.h/2, multi > 2 ? '#F1C40F' : C.PINK, multi > 1 ? 18 : 10)
   sfxBreak(); sfxChaos()
-  triggerShakeG(g, 2, 0.2)
+  triggerShakeG(g, multi > 1 ? 3 : 2, 0.2)
   checkObjectives(g)
-  // Score popup
+
   if (!g.scorePopups) g.scorePopups = []
+  const popText = multi > 1 ? `+${pts} x${multi}!` : `+${pts}`
   g.scorePopups.push({
-    text: '+' + item.points,
+    text: popText,
     x: item.x + item.w/2,
     y: item.y - 4,
     life: 1.2,
-    color: '#F1C40F',
+    color: multi > 2 ? '#F1C40F' : multi > 1 ? '#FF69B4' : '#F1C40F',
     vy: -0.5
   })
   g.nearItem = null
@@ -881,6 +894,29 @@ function drawHUD(g) {
     // Arrow pointing right toward exit
     vc.fillStyle = '#00FFFF'; vc.font = `${Math.max(8,ss(6))}px monospace`
     vc.fillText('→ →', _SOX + ss(VW-20), etY + etH*0.75)
+  }
+
+  // Combo display
+  if (g.comboCount > 1 && g.comboTimer > 0) {
+    const cPulse = 0.85 + 0.15*Math.sin(menuTime*12)
+    const cfs = Math.max(12, ss(7)*cPulse)
+    vc.shadowColor='#F1C40F'; vc.shadowBlur=ss(12)
+    vc.fillStyle='#F1C40F'; vc.font=`bold ${cfs}px monospace`; vc.textAlign='center'
+    vc.fillText(`COMBO x${Math.min(g.comboCount,5)}!`, canvas.width/2, canvas.height/2 - ss(30))
+    // Timer bar
+    const ctW=ss(60), ctX=canvas.width/2-ctW/2, ctY=canvas.height/2-ss(24)
+    vc.fillStyle='rgba(0,0,0,0.5)'; vc.fillRect(ctX,ctY,ctW,ss(4))
+    vc.fillStyle='#F1C40F'; vc.fillRect(ctX,ctY,Math.round(ctW*g.comboTimer/3),ss(4))
+    vc.shadowBlur=0
+  }
+
+  // "KEEP CAUSING CHAOS!" when nothing to break and chaos decaying
+  const activeNow = g.interactables.filter(i=>!i.broken).length
+  if (activeNow === 0 && g.chaos > 5 && !g.escapeActive && Math.floor(menuTime*2)%2===0) {
+    vc.shadowColor='#E74C3C'; vc.shadowBlur=ss(8)
+    vc.fillStyle='#E74C3C'; vc.font=`bold ${Math.max(9,ss(5))}px monospace`; vc.textAlign='center'
+    vc.fillText('KEEP CAUSING CHAOS!', canvas.width/2, _SOY+ss(VH_BASE)-ss(28))
+    vc.shadowBlur=0
   }
 
   // Boss hint
@@ -1181,6 +1217,32 @@ function triggerShakeG(g, intensity, dur) {
   g.shakeDur = dur; g.shakeX = intensity; g.shakeY = intensity
 }
 
+// ── SPAWN INTERACTABLE ────────────────────────────────────────
+const SPAWN_TYPES = [
+  {type:'toy',   color:'#FF69B4', w:10, h:12, points:10, chaosAdd:6,  label:'TOY'},
+  {type:'juice', color:'#FF8C00', w:8,  h:14, points:15, chaosAdd:9,  label:'JCE'},
+  {type:'toy',   color:'#87CEEB', w:11, h:11, points:10, chaosAdd:6,  label:'BLK'},
+  {type:'alarm', color:'#FF0000', w:10, h:18, points:25, chaosAdd:14, label:'ALM'},
+  {type:'toy',   color:'#F1C40F', w:13, h:10, points:12, chaosAdd:7,  label:'BK'},
+  {type:'speaker',color:'#9B59B6',w:14, h:12, points:20, chaosAdd:11, label:'SPK'},
+]
+
+function spawnInteractable(g) {
+  const def = SPAWN_TYPES[Math.floor(Math.random() * SPAWN_TYPES.length)]
+  const platform = g.platforms[Math.floor(Math.random() * Math.max(1, g.platforms.length - 1))]
+  const px = platform ? platform.x + Math.random() * (platform.w - def.w) : 20 + Math.random() * (VW_BASE - 40)
+  const py = platform ? platform.y - def.h : VH_BASE - 40
+  const id = 'spawn_' + Date.now() + '_' + Math.floor(Math.random()*9999)
+  g.interactables.push({ id, x:px, y:py, w:def.w, h:def.h, type:def.type, color:def.color, points:def.points, chaosAdd:def.chaosAdd, label:def.label, broken:false, spawned:true })
+}
+
+function spawnExtraEnemy(g, side) {
+  const platform = g.platforms[0]
+  const ex = side === 'left' ? 20 : VW_BASE - 20
+  const ey = platform ? platform.y - 14 : VH_BASE - 28
+  g.enemies.push({ type:'mama', x:ex + g.cameraX, y:ey, hp:3, dir:side==='left'?1:-1, patrol:true, patrolDist:60, id:Math.random() })
+}
+
 function update(dt) {
   if (!game) return
   const g = game
@@ -1206,8 +1268,39 @@ function update(dt) {
   updateProjectiles(g, dt)
   updateParticles(dt)
 
-  // Chaos auto-rise
-  g.chaos = Math.min(100, g.chaos + dt * 0.5)
+  // ── Combo timer decay ─────────────────────────────────────────
+  if (g.comboTimer > 0) { g.comboTimer -= dt; if (g.comboTimer <= 0) g.comboCount = 0 }
+
+  // ── Object spawning — respawn every 3-5s ──────────────────────
+  const activeItems = g.interactables.filter(i => !i.broken).length
+  g.spawnTimer -= dt
+  if (g.spawnTimer <= 0 && activeItems < 5 && !g.escapeActive) {
+    spawnInteractable(g)
+    g.spawnTimer = 3 + Math.random() * 2.5
+    sfxCoin()
+  }
+
+  // ── Chaos dynamics ────────────────────────────────────────────
+  // Faster fill when there are active objects (player has things to do)
+  // Decay slowly if NO objects left (motivates breaking things quickly)
+  const chaosSpeed = activeItems > 0
+    ? 1.5 + g.time * 0.04   // rises faster over time
+    : -4                     // decays if nothing to break
+  g.chaos = Math.max(0, Math.min(100, g.chaos + chaosSpeed * dt))
+
+  // ── Escalating enemies ────────────────────────────────────────
+  if (g.chaos > 50 && g.enemySpawnChaos < 50 && g.enemies.length < 3) {
+    spawnExtraEnemy(g, 'left'); g.enemySpawnChaos = 50
+    sfxAlarm()
+  }
+  if (g.chaos > 75 && g.enemySpawnChaos < 75 && g.enemies.length < 4) {
+    spawnExtraEnemy(g, 'right'); g.enemySpawnChaos = 75
+    sfxAlarm()
+  }
+  // Enemies speed up at 90%+
+  if (g.chaos > 90) {
+    g.enemies.forEach(e => { if (e.hp > 0) e.patrolDist = Math.min(100, (e.patrolDist||60) + dt * 3) })
+  }
 
   // Screen shake decay
   if (g.shakeDur > 0) {
