@@ -13,9 +13,10 @@ const ctx    = canvas.getContext('2d')
 // vc = ctx: no virtual canvas — render directly at native resolution, no blur
 const vc = ctx
 
-let VW = VW_BASE, VH = VH_BASE  // updated by resize() - kept for legacy refs in menus
-let _S = 1       // draw scale factor (native/virtual)
-let _SOX = 0, _SOY = 0  // centering offsets
+// VW/VH stay at 320×180 — all game/menu logic uses virtual coords
+// Native resolution handled by _S scale factor
+const VW = VW_BASE, VH = VH_BASE
+let _S = 1, _SOX = 0, _SOY = 0
 
 function resize() {
   canvas.width  = window.innerWidth
@@ -24,7 +25,6 @@ function resize() {
   _S   = Math.min(canvas.width / VW_BASE, canvas.height / VH_BASE)
   _SOX = (canvas.width  - VW_BASE * _S) / 2
   _SOY = (canvas.height - VH_BASE * _S) / 2
-  VW = canvas.width; VH = canvas.height
 }
 window.addEventListener('resize', resize)
 resize()
@@ -1018,9 +1018,10 @@ function drawBackground(g, lvl) {
 
 function drawLevel(g) {
   const lvl = LEVELS[g.level]
-  // Clear full native canvas
+  // Clear full native canvas first, then fill virtual game area
+  vc.fillStyle = '#000'; vc.fillRect(0, 0, canvas.width, canvas.height)
   vc.fillStyle = lvl.bgColor
-  vc.fillRect(0, 0, canvas.width, canvas.height)
+  vc.fillRect(_SOX, _SOY, VW_BASE * _S, VH_BASE * _S)
 
   drawBackground(g, lvl)
 
@@ -1803,7 +1804,7 @@ function gameLoop(ts) {
 
   if (state === 'playing') {
     // Clear and render game world to virtual canvas, then blit to screen
-    vc.fillStyle = '#000'; vc.fillRect(0, 0, VW, VH)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     update(dt)
     render()
     if (keys.space)    { if (game) doAction(game); keys.space = false }
@@ -1818,7 +1819,7 @@ function gameLoop(ts) {
     blitToScreen()
   } else if (state === 'paused') {
     // Game world on vc, pause overlay on ctx at native resolution
-    vc.fillStyle = '#000'; vc.fillRect(0, 0, VW, VH)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     render()
     blitToScreen()
     beginMenuDraw()
