@@ -4,41 +4,45 @@
 // ============================================================
 
 // ── 1. CONSTANTS & CANVAS ────────────────────────────────────
-const VW = 320, VH = 180
-
-const virtualCanvas = document.createElement('canvas')
-virtualCanvas.width  = VW
-virtualCanvas.height = VH
-const vc = virtualCanvas.getContext('2d')
-vc.imageSmoothingEnabled = false
+// Virtual game coordinates: 320×180 design space
+// All physics/collision in virtual space; only drawing scales to native res
+const VW_BASE = 320, VH_BASE = 180
 
 const canvas = document.getElementById('gameCanvas')
 const ctx    = canvas.getContext('2d')
-ctx.imageSmoothingEnabled = false
+// vc = ctx: no virtual canvas — render directly at native resolution, no blur
+const vc = ctx
+
+let VW = VW_BASE, VH = VH_BASE  // updated by resize() - kept for legacy refs in menus
+let _S = 1       // draw scale factor (native/virtual)
+let _SOX = 0, _SOY = 0  // centering offsets
 
 function resize() {
-  canvas.width  = canvas.offsetWidth  || window.innerWidth
-  canvas.height = canvas.offsetHeight || window.innerHeight
-  ctx.imageSmoothingEnabled = false   // re-apply after every resize (resizing resets context)
+  canvas.width  = window.innerWidth
+  canvas.height = window.innerHeight
+  ctx.imageSmoothingEnabled = false
+  _S   = Math.min(canvas.width / VW_BASE, canvas.height / VH_BASE)
+  _SOX = (canvas.width  - VW_BASE * _S) / 2
+  _SOY = (canvas.height - VH_BASE * _S) / 2
+  VW = canvas.width; VH = canvas.height
 }
 window.addEventListener('resize', resize)
 resize()
 
-function blitToScreen() {
-  ctx.imageSmoothingEnabled = false
-  const scale = Math.min(canvas.width / VW, canvas.height / VH)
-  const ox = (canvas.width  - VW * scale) / 2
-  const oy = (canvas.height - VH * scale) / 2
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.drawImage(virtualCanvas, ox, oy, VW * scale, VH * scale)
-}
+// Scale helpers: convert virtual coords → screen coords
+const sp  = (v)    => v * _S                    // scale position or size
+const spx = (v)    => _SOX + v * _S             // scale X with centering
+const spy = (v)    => _SOY + v * _S             // scale Y with centering
+const ss  = (v)    => Math.max(1, v * _S)       // scale size (min 1px)
+
+function blitToScreen() { /* no-op: vc===ctx, already drawn to screen */ }
 
 let _menuScale = 1, _menuOX = 0, _menuOY = 0
 
 function beginMenuDraw() {
-  _menuScale = Math.min(canvas.width / VW, canvas.height / VH)
-  _menuOX    = (canvas.width  - VW * _menuScale) / 2
-  _menuOY    = (canvas.height - VH * _menuScale) / 2
+  _menuScale = _S
+  _menuOX    = _SOX
+  _menuOY    = _SOY
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.save()
   ctx.translate(_menuOX, _menuOY)
@@ -151,7 +155,8 @@ function drawParticles() {
   particles.forEach(p => {
     vc.globalAlpha = Math.max(0, p.life / p.maxLife)
     vc.fillStyle   = p.color
-    vc.fillRect(Math.round(p.x - p.size/2), Math.round(p.y - p.size/2), p.size, p.size)
+    const ps = Math.max(2, ss(p.size))
+    vc.fillRect(Math.round(spx(p.x) - ps/2), Math.round(spy(p.y) - ps/2), ps, ps)
   })
   vc.globalAlpha = 1
 }
@@ -421,93 +426,80 @@ function drawMenuBg() {
 // ── PLAYER DRAW ──────────────────────────────────────────────
 function drawPlayer(g) {
   if (g.invincible > 0 && Math.floor(g.invincible * 10) % 2 === 0) return
-  const hx = Math.round(g.x - g.cameraX)  // hitbox x
-  const hy = Math.round(g.y)               // hitbox y
   const skin = SKINS[g.skin] || SKINS['default']
   const bc = skin.color, dc = skin.darkColor
   const flip = !g.facingRight
 
-  // Draw bigger sprite (18×24) centered on hitbox
-  const pw = 18, ph = 24
-  const px = hx - (pw - PLAYER_W) / 2
-  const py = hy - (ph - PLAYER_H)
+  // Virtual coords (for positioning)
+  const vhx = g.x - g.cameraX, vhy = g.y
+  // Sprite is 16×20 virtual units centered on hitbox
+  const pw = 16, ph = 20
+  const vpx = vhx - (pw - PLAYER_W) / 2
+  const vpy = vhy - (ph - PLAYER_H)
+  // Screen coords
+  const px = spx(vpx), py = spy(vpy)
 
-  // Bob animation when moving
-  const bob = g.onGround && Math.abs(g.vx) > 0.3 ? Math.sin(g.animFrame * 0.8) * 1 : 0
+  // Bob in virtual units → scale to screen
+  const bobV = g.onGround && Math.abs(g.vx) > 0.3 ? Math.sin(g.animFrame * 0.8) : 0
+  const bob  = ss(bobV)
+  // Helper: draw pixel-rect at virtual offset from sprite origin (px,py)
+  const r = (dx, dy, dw, dh) => vc.fillRect(Math.round(px+ss(dx)), Math.round(py+ss(dy)), Math.max(1,ss(dw)), Math.max(1,ss(dh)))
 
   vc.save()
-  if (flip) { vc.translate(px + pw/2, 0); vc.scale(-1,1); vc.translate(-(px+pw/2),0) }
+  if (flip) { vc.translate(px+ss(pw)/2, 0); vc.scale(-1,1); vc.translate(-(px+ss(pw)/2),0) }
 
   // Ground shadow
-  vc.fillStyle = 'rgba(0,0,0,0.30)'
-  vc.fillRect(px+2, hy+PLAYER_H-1, pw-4, 2)
+  vc.fillStyle = 'rgba(0,0,0,0.28)'
+  vc.fillRect(Math.round(px+ss(2)), Math.round(spy(g.y+PLAYER_H)), ss(pw-4), Math.max(2,ss(2)))
 
   // Legs
   const walk = Math.floor(g.animFrame % 4)
   vc.fillStyle = dc
-  const legY = py + ph + bob
   if (!g.onGround) {
-    // tucked up
-    vc.fillRect(px+3,  legY-4, 4, 3)
-    vc.fillRect(px+11, legY-4, 4, 3)
+    r(3, ph-4, 4, 3); r(10, ph-4, 4, 3)  // tucked
   } else if (walk < 2) {
-    vc.fillRect(px+2,  legY-2, 4, 5)
-    vc.fillRect(px+12, legY-4, 4, 3)
+    r(2, ph-1, 4, 5); r(10, ph-3, 4, 3)
   } else {
-    vc.fillRect(px+2,  legY-4, 4, 3)
-    vc.fillRect(px+12, legY-2, 4, 5)
+    r(2, ph-3, 4, 3); r(10, ph-1, 4, 5)
   }
 
-  // Body — oval shape (wider than tall)
-  vc.fillStyle = bc
-  vc.fillRect(px+2, py+12+bob, pw-4, 10)    // body core
-  vc.fillRect(px+1, py+13+bob, pw-2, 8)     // body wider middle
-  vc.fillRect(px+3, py+11+bob, pw-6, 11)    // smooth oval
-
-  // Chaos aura (behind body)
+  // Chaos aura
   if (g.chaos > 50) {
-    const glowPct = (g.chaos-50)/50
-    vc.globalAlpha = glowPct * 0.40 * (0.6+0.4*Math.sin(menuTime*8))
-    vc.fillStyle = g.chaos > 75 ? '#FF0000' : '#9B59B6'
-    vc.fillRect(px-3, py+bob-2, pw+6, ph+6)
+    const gp = (g.chaos-50)/50
+    vc.globalAlpha = gp*0.38*(0.6+0.4*Math.sin(menuTime*8))
+    vc.fillStyle = g.chaos>75?'#FF0000':'#9B59B6'
+    vc.fillRect(Math.round(px+ss(-3)), Math.round(py+ss(-2)-bob), ss(pw+6), ss(ph+6))
     vc.globalAlpha = 1
   }
 
-  // Head — circle on top of body
+  // Body oval
   vc.fillStyle = bc
-  vc.fillRect(px+3,  py+2+bob,  pw-6, 12)   // head core
-  vc.fillRect(px+4,  py+1+bob,  pw-8, 13)   // head rounded
-  vc.fillRect(px+2,  py+4+bob,  pw-4, 9)    // head wider
+  r(2, 11+bobV, pw-4, 9); r(1, 12+bobV, pw-2, 7); r(3, 10+bobV, pw-6, 10)
 
-  // Ears — triangular (2 rects making a triangle shape)
+  // Head
+  r(3, 1+bobV, pw-6, 11); r(4, 0+bobV, pw-8, 12); r(2, 3+bobV, pw-4, 8)
+
+  // Ears
   vc.fillStyle = bc
-  vc.fillRect(px+3,  py-3+bob,  5, 5)        // left ear
-  vc.fillRect(px+10, py-3+bob,  5, 5)        // right ear
+  r(3, -4+bobV, 5, 5); r(9, -4+bobV, 5, 5)
   vc.fillStyle = '#FFB6C1'
-  vc.fillRect(px+4,  py-2+bob,  2, 3)        // left ear inner
-  vc.fillRect(px+11, py-2+bob,  2, 3)        // right ear inner
+  r(4, -3+bobV, 2, 3); r(10, -3+bobV, 2, 3)
 
-  // Snout — oval protruding right side of face
+  // Snout
   vc.fillStyle = '#FFB6C1'
-  vc.fillRect(px+12, py+7+bob,  6, 5)        // snout oval
-  vc.fillRect(px+11, py+8+bob,  7, 3)        // snout wider
-
-  // Nostrils
+  r(11, 5+bobV, 6, 5); r(10, 6+bobV, 7, 3)
   vc.fillStyle = dc
-  vc.fillRect(px+13, py+8+bob, 2, 2)
-  vc.fillRect(px+16, py+8+bob, 2, 2)
+  r(12, 7+bobV, 2, 2); r(15, 7+bobV, 2, 2)
 
-  // Eyes — white with black pupil, looking right
+  // Eyes
   vc.fillStyle = '#FFFFFF'
-  vc.fillRect(px+5,  py+4+bob, 4, 4)         // left eye
-  vc.fillRect(px+9,  py+4+bob, 4, 4)         // right eye (towards snout)
-  vc.fillStyle = '#111111'
-  vc.fillRect(px+7,  py+5+bob, 2, 2)         // left pupil (look right)
-  vc.fillRect(px+11, py+5+bob, 2, 2)         // right pupil
+  r(4, 3+bobV, 4, 4); r(8, 3+bobV, 4, 4)
+  vc.fillStyle = '#111'
+  r(6, 4+bobV, 2, 2); r(10, 4+bobV, 2, 2)
 
-  // Mouth — tiny smile
+  // Mouth
   vc.fillStyle = dc
-  vc.fillRect(px+9,  py+10+bob, 3, 1)
+  r(8, 8+bobV, 3, 1)
 
   vc.restore()
 
@@ -553,54 +545,40 @@ function updateEnemies(g, dt) {
 }
 
 function drawHpBar(x, y, w, hp, maxHp) {
-  vc.fillStyle = '#333'; vc.fillRect(x, y, w, 2)
-  vc.fillStyle = '#00FF00'
-  vc.fillRect(x, y, Math.round(w * (hp / maxHp)), 2)
+  // x,y,w already in screen coords
+  const bh = Math.max(2, ss(2))
+  vc.fillStyle = '#333'; vc.fillRect(x, y, w, bh)
+  vc.fillStyle = '#00FF00'; vc.fillRect(x, y, Math.round(w*(hp/maxHp)), bh)
 }
 
 function drawEnemy(e, cameraX) {
-  const ex = Math.round(e.x - cameraX)
-  const ey = Math.round(e.y)
-  const w = 12, h = 14
-  if (ex < -20 || ex > VW + 20) return
+  const exV = e.x - cameraX, eyV = e.y
+  if (exV < -40 || exV > VW_BASE + 40) return
+  const ex = spx(exV), ey = spy(eyV)
+  const w = ss(12), h = ss(14)
+
+  // Helper: draw relative to enemy top-left using virtual offsets
+  const er = (dx,dy,dw,dh) => vc.fillRect(Math.round(ex+ss(dx)), Math.round(ey+ss(dy)), Math.max(1,ss(dw)), Math.max(1,ss(dh)))
 
   if (e.type === 'mama') {
-    vc.fillStyle = '#CC3380'
-    vc.fillRect(ex - 1, ey + 3, w + 2, 9)
-    vc.fillStyle = '#FF4499'
-    vc.fillRect(ex, ey, w, 7)
-    vc.fillStyle = '#AA2255'
-    vc.fillRect(ex + 7, ey + 2, 5, 3)
-    vc.fillStyle = '#FF0000'
-    vc.fillRect(ex + 1, ey + 1, 2, 2)
-    vc.fillRect(ex + 8, ey + 1, 2, 2)
-    vc.fillStyle = '#000000'
-    vc.fillRect(ex + 1, ey, 3, 1)
-    vc.fillRect(ex + 8, ey, 3, 1)
-    drawHpBar(ex, ey - 5, w, e.hp, 3)
+    vc.fillStyle='#CC3380'; er(-1,3,14,9)
+    vc.fillStyle='#FF4499'; er(0,0,12,7)
+    vc.fillStyle='#AA2255'; er(7,2,5,3)
+    vc.fillStyle='#FF0000'; er(1,1,2,2); er(8,1,2,2)
+    vc.fillStyle='#000';    er(1,0,3,1); er(8,0,3,1)
+    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
   } else if (e.type === 'teacher') {
-    vc.fillStyle = '#3A5A8A'
-    vc.fillRect(ex, ey + 4, w, 8)
-    vc.fillStyle = '#5A7AAA'
-    vc.fillRect(ex + 1, ey, w - 2, 6)
-    vc.fillStyle = '#000'
-    vc.fillRect(ex + 2, ey + 1, 2, 2)
-    vc.fillRect(ex + 7, ey + 1, 2, 2)
-    vc.fillStyle = '#888'
-    vc.fillRect(ex + 1, ey + 1, 3, 3)
-    vc.fillRect(ex + 6, ey + 1, 3, 3)
-    drawHpBar(ex, ey - 5, w, e.hp, 3)
+    vc.fillStyle='#3A5A8A'; er(0,4,12,8)
+    vc.fillStyle='#5A7AAA'; er(1,0,10,6)
+    vc.fillStyle='#000';    er(2,1,2,2); er(7,1,2,2)
+    vc.fillStyle='#888';    er(1,1,3,3); er(6,1,3,3)
+    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
   } else if (e.type === 'guard') {
-    vc.fillStyle = '#2A2A5A'
-    vc.fillRect(ex, ey + 4, w, 8)
-    vc.fillStyle = '#4A4A7A'
-    vc.fillRect(ex + 1, ey, w - 2, 6)
-    vc.fillStyle = '#FF8800'
-    vc.fillRect(ex + 3, ey + 5, 4, 4)
-    vc.fillStyle = '#000'
-    vc.fillRect(ex + 2, ey + 1, 2, 2)
-    vc.fillRect(ex + 7, ey + 1, 2, 2)
-    drawHpBar(ex, ey - 5, w, e.hp, 3)
+    vc.fillStyle='#2A2A5A'; er(0,4,12,8)
+    vc.fillStyle='#4A4A7A'; er(1,0,10,6)
+    vc.fillStyle='#FF8800'; er(3,5,4,4)
+    vc.fillStyle='#000';    er(2,1,2,2); er(7,1,2,2)
+    drawHpBar(ex, ey-ss(6), w, e.hp, 3)
   }
 }
 
@@ -780,7 +758,7 @@ function checkObjectives(g) {
 // ── 12. CHAOS METER ──────────────────────────────────────────
 function drawChaosBar(g) {
   const pct = g.chaos / 100
-  const bx = VW/2 - 45, by = 2, bw = 90, bh = 8
+  const bx = canvas.width/2 - ss(45), by = ss(2), bw = ss(90), bh = ss(8)
   // Background
   vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(bx-1, by-1, bw+2, bh+4)
   // Gradient fill (green→yellow→orange→red)
@@ -815,38 +793,43 @@ function drawChaosBar(g) {
 // ── 13. HUD ──────────────────────────────────────────────────
 function hudPanel(x, y, w, h, borderCol) {
   vc.fillStyle='rgba(0,0,15,0.72)'; vc.fillRect(x,y,w,h)
-  vc.shadowColor=borderCol; vc.shadowBlur=4
-  vc.strokeStyle=borderCol; vc.lineWidth=0.75; vc.strokeRect(x,y,w,h)
-  // top shine
-  vc.fillStyle='rgba(255,255,255,0.08)'; vc.fillRect(x,y,w,2)
+  vc.shadowColor=borderCol; vc.shadowBlur=Math.max(4,ss(4))
+  vc.strokeStyle=borderCol; vc.lineWidth=Math.max(1,ss(0.75)); vc.strokeRect(x,y,w,h)
+  vc.fillStyle='rgba(255,255,255,0.08)'; vc.fillRect(x,y,w,Math.max(1,ss(2)))
   vc.shadowBlur=0
 }
 
 function drawHUD(g) {
+  const fs = Math.max(10, ss(5))   // font size
+  const fsBig = Math.max(12, ss(6))
+
   // Top-left: score + coins — neon CYAN panel
-  hudPanel(2, 2, 68, 24, '#00FFFF')
-  vc.font='4px monospace'; vc.textAlign='left'
-  vc.fillStyle='rgba(255,255,255,0.5)'; vc.fillText('SCORE', 5, 10)
-  vc.shadowColor='#00FFFF'; vc.shadowBlur=5
-  vc.fillStyle='#00FFFF'; vc.font='6px monospace'
-  vc.fillText(g.score.toLocaleString(), 5, 18)
+  const panW = ss(70), panH = ss(26)
+  hudPanel(_SOX+ss(2), _SOY+ss(2), panW, panH, '#00FFFF')
+  vc.font=`${fs}px monospace`; vc.textAlign='left'
+  vc.fillStyle='rgba(255,255,255,0.5)'; vc.fillText('SCORE', _SOX+ss(5), _SOY+ss(10))
+  vc.shadowColor='#00FFFF'; vc.shadowBlur=ss(5)
+  vc.fillStyle='#00FFFF'; vc.font=`${fsBig}px monospace`
+  vc.fillText(g.score.toLocaleString(), _SOX+ss(5), _SOY+ss(18))
   vc.shadowBlur=0
-  vc.fillStyle='#F1C40F'; vc.font='4px monospace'
-  vc.fillText('$ '+g.coins, 5, 25)
+  vc.fillStyle='#F1C40F'; vc.font=`${fs}px monospace`
+  vc.fillText('$ '+g.coins, _SOX+ss(5), _SOY+ss(26))
 
   // Top-right: level name + timer — neon PINK panel
-  hudPanel(VW-70, 2, 68, 24, '#FF69B4')
+  const rx = _SOX+ss(VW_BASE)-ss(70)
+  hudPanel(rx, _SOY+ss(2), panW, panH, '#FF69B4')
   vc.textAlign='right'
-  vc.shadowColor='#FF69B4'; vc.shadowBlur=5
-  vc.fillStyle='#FF69B4'; vc.font='5px monospace'
-  vc.fillText('LV.'+(g.level+1)+' '+LEVELS[g.level].name.substring(0,8), VW-5, 10)
+  vc.shadowColor='#FF69B4'; vc.shadowBlur=ss(5)
+  vc.fillStyle='#FF69B4'; vc.font=`${fs}px monospace`
+  vc.fillText('LV.'+(g.level+1), _SOX+ss(VW_BASE)-ss(5), _SOY+ss(11))
   vc.shadowBlur=0
-  vc.fillStyle='rgba(255,255,255,0.6)'; vc.font='4px monospace'
-  vc.fillText(LEVELS[g.level].name.substring(0,14), VW-5, 17)
+  vc.fillStyle='rgba(255,255,255,0.6)'; vc.font=`${Math.max(8,ss(4))}px monospace`
+  vc.fillText(LEVELS[g.level].name.substring(0,14), _SOX+ss(VW_BASE)-ss(5), _SOY+ss(18))
   const timeLeft=Math.max(0,LEVELS[g.level].duration-g.time)
   const timerBlink=timeLeft<5&&Math.floor(menuTime*4)%2===0
   const timerCol=timeLeft<15?(timerBlink?'#FF0000':'#FF5500'):'#FFF'
-  vc.fillStyle=timerCol; vc.fillText(Math.ceil(timeLeft)+'s', VW-5, 24)
+  vc.fillStyle=timerCol; vc.font=`${fsBig}px monospace`
+  vc.fillText(Math.ceil(timeLeft)+'s', _SOX+ss(VW_BASE)-ss(5), _SOY+ss(26))
 
   // Chaos bar — center top
   drawChaosBar(g)
@@ -854,49 +837,51 @@ function drawHUD(g) {
   // Bottom-left: HP hearts
   for (let i = 0; i < g.maxHp; i++) {
     vc.fillStyle = i < g.hp ? '#FF3333' : '#333'
-    vc.fillRect(4 + i * 10, VH - 10, 4, 4)
-    vc.fillRect(2 + i * 10, VH - 12, 3, 3)
-    vc.fillRect(5 + i * 10, VH - 12, 3, 3)
-    vc.fillRect(3 + i * 10, VH - 13, 4, 2)
+    const hx2 = _SOX+ss(4+i*11), hy2 = _SOY+ss(VH_BASE-11)
+    const hs = Math.max(3,ss(4))
+    vc.fillRect(hx2, hy2, hs, hs)
+    vc.fillRect(hx2-ss(2), hy2-ss(2), Math.max(2,ss(3)), Math.max(2,ss(3)))
+    vc.fillRect(hx2+ss(4), hy2-ss(2), Math.max(2,ss(3)), Math.max(2,ss(3)))
+    vc.fillRect(hx2-ss(1), hy2-ss(3), Math.max(3,ss(4)), Math.max(1,ss(2)))
   }
 
   // Bottom-center: interact hint
   if (g.nearItem && !g.nearItem.broken) {
-    vc.fillStyle = 'rgba(0,0,0,0.75)'; vc.fillRect(VW/2 - 28, VH - 14, 56, 11)
-    vc.shadowColor = '#F1C40F'; vc.shadowBlur = 6
-    vc.fillStyle = '#F1C40F'; vc.font = '4px monospace'; vc.textAlign = 'center'
-    vc.fillText('[SPC] ' + g.nearItem.type.toUpperCase(), VW/2, VH - 7)
-    vc.shadowBlur = 0
+    const hintW=ss(60), hintH=ss(12)
+    const hintX=canvas.width/2-hintW/2, hintY=_SOY+ss(VH_BASE)-hintH-ss(4)
+    vc.fillStyle='rgba(0,0,0,0.75)'; vc.fillRect(hintX, hintY, hintW, hintH)
+    vc.shadowColor='#F1C40F'; vc.shadowBlur=ss(6)
+    vc.fillStyle='#F1C40F'; vc.font=`${Math.max(9,ss(5))}px monospace`; vc.textAlign='center'
+    vc.fillText('[SPACE] '+g.nearItem.type.toUpperCase(), canvas.width/2, hintY+hintH*0.72)
+    vc.shadowBlur=0
   }
 
   // Bottom-right: objectives
-  vc.textAlign = 'right'; vc.font = '4px monospace'
-  g.objectives.forEach((obj, i) => {
-    vc.fillStyle = obj.done ? '#2ECC71' : 'rgba(255,255,255,0.5)'
-    vc.fillText((obj.done ? '✓ ' : '· ') + obj.text.substring(0, 16), VW - 2, VH - 14 + i * 6)
+  const objFs=Math.max(8,ss(4))
+  vc.textAlign='right'; vc.font=`${objFs}px monospace`
+  g.objectives.forEach((obj,i)=>{
+    vc.fillStyle=obj.done?'#2ECC71':'rgba(255,255,255,0.5)'
+    vc.fillText((obj.done?'✓ ':'· ')+obj.text.substring(0,16), _SOX+ss(VW_BASE)-ss(2), _SOY+ss(VH_BASE)-ss(16)+i*ss(7))
   })
 
-  // Boss objective note for level 6
-  if (g.level === 5 && !g.bossSpawned) {
-    vc.fillStyle = '#FFD700'; vc.textAlign = 'center'; vc.font = '4px monospace'
-    vc.fillText('RAISE CHAOS TO 40% TO SUMMON BOSS', VW / 2, VH / 2 - 20)
+  // Boss hint
+  if (g.level===5 && !g.bossSpawned) {
+    vc.fillStyle='#FFD700'; vc.textAlign='center'; vc.font=`${Math.max(9,ss(5))}px monospace`
+    vc.fillText('RAISE CHAOS TO 40% TO SUMMON BOSS!', canvas.width/2, canvas.height/2-ss(20))
   }
 
-  // Score popups
+  // Score popups (in screen space)
   if (!g.scorePopups) g.scorePopups = []
-  const dt_approx = 0.016
-  g.scorePopups = g.scorePopups.filter(p => {
-    p.y += p.vy
-    p.x += (Math.random() - 0.5) * 0.3
-    p.life -= dt_approx
-    const a = Math.max(0, Math.min(1, p.life))
-    vc.globalAlpha = a
-    vc.fillStyle = p.color
-    vc.font = '6px monospace'; vc.textAlign = 'center'
-    vc.shadowColor = p.color; vc.shadowBlur = 5
-    vc.fillText(p.text, Math.round(p.x - g.cameraX), Math.round(p.y))
-    vc.globalAlpha = 1; vc.shadowBlur = 0
-    return p.life > 0
+  const dt_approx=0.016
+  g.scorePopups=g.scorePopups.filter(p=>{
+    p.y+=p.vy; p.x+=(Math.random()-0.5)*0.3; p.life-=dt_approx
+    const a=Math.max(0,Math.min(1,p.life))
+    vc.globalAlpha=a; vc.fillStyle=p.color
+    vc.font=`${Math.max(12,ss(6))}px monospace`; vc.textAlign='center'
+    vc.shadowColor=p.color; vc.shadowBlur=ss(5)
+    vc.fillText(p.text, spx(p.x-g.cameraX), spy(p.y))
+    vc.globalAlpha=1; vc.shadowBlur=0
+    return p.life>0
   })
 
   vc.textAlign = 'left'
@@ -914,6 +899,10 @@ function lightenColor(hex) {
 }
 
 function drawBackground(g, lvl) {
+  // Apply scale transform so all virtual coords map to native resolution
+  vc.save()
+  vc.translate(_SOX, _SOY)
+  vc.scale(_S, _S)
   switch (lvl.id) {
     case 1: { // Bedroom — soft purple night
       vc.fillStyle = '#2A1540'; vc.fillRect(0, 0, VW, VH)
@@ -1013,69 +1002,71 @@ function drawBackground(g, lvl) {
       for (let i = 0; i < 15; i++) {
         const angle = (i / 15) * Math.PI * 2 + (menuTime * 0.3)
         const r = 40 + i * 4
-        const sx = VW/2 + Math.cos(angle) * r, sy = VH/2 + Math.sin(angle) * r
+        const sx = VW_BASE/2 + Math.cos(angle) * r, sy = VH_BASE/2 + Math.sin(angle) * r
         vc.fillStyle = 'rgba(255,255,255,' + (0.3 + Math.random() * 0.4) + ')'
         vc.fillRect(sx, sy, 1, 1)
       }
       if (Math.random() > 0.7) {
         vc.fillStyle = 'rgba(' + ((Math.random() * 255) | 0) + ',0,255,0.2)'
-        vc.fillRect(0, (Math.random() * VH) | 0, VW, 2 + ((Math.random() * 5) | 0))
+        vc.fillRect(0, (Math.random() * VH_BASE) | 0, VW_BASE, 2 + ((Math.random() * 5) | 0))
       }
       break
     }
   }
+  vc.restore()  // end drawBackground scale transform
 }
 
 function drawLevel(g) {
   const lvl = LEVELS[g.level]
-  vc.fillStyle = lvl.bgColor; vc.fillRect(0, 0, VW, VH)
+  // Clear full native canvas
+  vc.fillStyle = lvl.bgColor
+  vc.fillRect(0, 0, canvas.width, canvas.height)
 
   drawBackground(g, lvl)
 
-  // Floating background particles (draw in game world too)
+  // Floating bg particles
   bgParticles.forEach(p => {
-    vc.globalAlpha = 0.35
-    vc.fillStyle = p.c
-    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
+    vc.globalAlpha = 0.35; vc.fillStyle = p.c
+    // Particles drift across the full screen area
+    const bpx = _SOX + p.x * _S, bpy = _SOY + p.y * _S
+    vc.fillRect(Math.round(bpx), Math.round(bpy), Math.max(2, ss(2)), Math.max(2, ss(2)))
     vc.globalAlpha = 1
   })
 
   g.platforms.forEach(p => {
-    const px = Math.round(p.x - g.cameraX)
-    // Dark platform fill
-    vc.fillStyle = p.c; vc.fillRect(px, p.y, p.w, p.h)
-    // Neon grid on ground/platforms
-    vc.fillStyle = 'rgba(0,255,255,0.12)'
-    const gridOff = Math.floor(g.cameraX) % 10
-    for (let gx = px - gridOff; gx < px + p.w; gx += 10) {
-      vc.fillRect(gx, p.y, 1, p.h)
-    }
-    for (let gy = p.y; gy < p.y + p.h; gy += 6) {
-      vc.fillRect(px, gy, p.w, 1)
-    }
-    // Top edge highlight (neon)
-    vc.fillStyle = 'rgba(255,0,255,0.6)'; vc.fillRect(px, p.y, p.w, 1)
-    // Second top line — cyan
-    vc.fillStyle = 'rgba(0,255,255,0.25)'; vc.fillRect(px, p.y+1, p.w, 1)
+    const px = spx(p.x - g.cameraX), py = spy(p.y)
+    const pw = ss(p.w), ph = ss(p.h)
+    vc.fillStyle = p.c; vc.fillRect(px, py, pw, ph)
+    // Neon scrolling grid
+    vc.fillStyle = 'rgba(0,255,255,0.10)'
+    const gridOff = (g.cameraX * _S) % ss(10)
+    const gridStep = Math.max(6, ss(10))
+    for (let gx = px - gridOff % gridStep; gx < px + pw; gx += gridStep) vc.fillRect(gx, py, 1, ph)
+    for (let gy = py; gy < py + ph; gy += Math.max(4, ss(6))) vc.fillRect(px, gy, pw, 1)
+    // Top neon edges
+    vc.fillStyle = 'rgba(255,0,255,0.65)'; vc.fillRect(px, py, pw, Math.max(1, ss(1)))
+    vc.fillStyle = 'rgba(0,255,255,0.30)'; vc.fillRect(px, py + Math.max(1,ss(1)), pw, Math.max(1,ss(1)))
   })
 
   g.interactables.forEach(item => {
     if (item.broken) return
-    const ix = Math.round(item.x - g.cameraX)
-    vc.fillStyle = item.color; vc.fillRect(ix, item.y, item.w, item.h)
-    vc.fillStyle = '#FFF'; vc.font = '3px monospace'; vc.textAlign = 'center'
-    const labels = { toy:'TOY', juice:'JUICE', wall:'MARK', alarm:'!', speaker:'SND', frogs:'FRG', wave:'~' }
-    vc.fillText(labels[item.type] || '?', ix + item.w/2, item.y + item.h/2 + 1)
+    const ix = spx(item.x - g.cameraX), iy = spy(item.y)
+    const iw = ss(item.w), ih = ss(item.h)
+    vc.fillStyle = item.color; vc.fillRect(ix, iy, iw, ih)
+    // Label
+    const fs = Math.max(8, ss(5))
+    vc.fillStyle = '#FFF'; vc.font = `${fs}px monospace`; vc.textAlign = 'center'
+    const labels = { toy:'TOY', juice:'JUICE', wall:'MARK', alarm:'!!', speaker:'SND', frogs:'FRG', wave:'~' }
+    vc.fillText(labels[item.type]||'?', ix+iw/2, iy+ih/2+fs*0.35)
     vc.textAlign = 'left'
   })
 
   g.enemies.forEach(e => { if (e.hp > 0) drawEnemy(e, g.cameraX) })
-
   if (g.boss && g.boss.hp > 0) drawBoss(g.boss, g.cameraX)
 
   g.projectiles.forEach(p => {
-    const px2 = Math.round(p.x - g.cameraX)
-    vc.fillStyle = p.color; vc.fillRect(px2 - p.r, Math.round(p.y) - p.r, p.r * 2, p.r * 2)
+    const px2 = spx(p.x - g.cameraX), py2 = spy(p.y), pr = ss(p.r)
+    vc.fillStyle = p.color; vc.fillRect(px2-pr, py2-pr, pr*2, pr*2)
   })
 
   drawPlayer(g)
@@ -1084,11 +1075,13 @@ function drawLevel(g) {
   // Escape zone
   const canEscape = g.objectivesCompleted >= g.objectives.length || g.chaos >= 90 || g.bossDefeated
   if (canEscape) {
-    const ez = Math.round(g.escapeX - g.cameraX)
-    vc.fillStyle = 'rgba(0,255,0,' + (0.3 + 0.2 * Math.sin(menuTime * 8)) + ')'
-    vc.fillRect(ez, g.escapeY - 30, 14, 30)
-    vc.fillStyle = '#00FF00'; vc.font = '4px monospace'; vc.textAlign = 'center'
-    vc.fillText('EXIT', ez + 7, g.escapeY - 32)
+    const ez = spx(g.escapeX - g.cameraX), ezy = spy(g.escapeY - 30)
+    const ezw = ss(14), ezh = ss(30)
+    vc.fillStyle = `rgba(0,255,0,${0.3+0.2*Math.sin(menuTime*8)})`
+    vc.fillRect(ez, ezy, ezw, ezh)
+    const fs = Math.max(8, ss(5))
+    vc.fillStyle = '#00FF00'; vc.font = `${fs}px monospace`; vc.textAlign = 'center'
+    vc.fillText('EXIT', ez+ezw/2, ezy-ss(4))
     vc.textAlign = 'left'
   }
 }
@@ -1224,32 +1217,33 @@ function render() {
   if (!game) return
   const g = game
   vc.save()
-  vc.translate(Math.round(g.shakeX || 0), Math.round(g.shakeY || 0))
+  vc.translate(Math.round((g.shakeX||0)*_S), Math.round((g.shakeY||0)*_S))
   drawLevel(g)
   drawHUD(g)
 
   if (eventPopup) {
-    const alpha = Math.min(1, eventPopup.timer)
-    vc.globalAlpha = alpha
-    vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(VW/2 - 35, VH/2 - 8, 70, 12)
-    vc.fillStyle = '#FF69B4'; vc.font = '6px monospace'; vc.textAlign = 'center'
-    vc.fillText(eventPopup.text, VW/2, VH/2 + 1)
-    vc.globalAlpha = 1; vc.textAlign = 'left'
+    const alpha=Math.min(1,eventPopup.timer)
+    vc.globalAlpha=alpha
+    const epW=ss(80),epH=ss(14)
+    vc.fillStyle='rgba(0,0,0,0.7)'; vc.fillRect(canvas.width/2-epW/2, canvas.height/2-epH/2, epW, epH)
+    vc.fillStyle='#FF69B4'; vc.font=`${Math.max(10,ss(6))}px monospace`; vc.textAlign='center'
+    vc.fillText(eventPopup.text, canvas.width/2, canvas.height/2+ss(2))
+    vc.globalAlpha=1; vc.textAlign='left'
   }
 
   if (g.dead) {
-    const fade = Math.min(0.8, (g.deathTimer || 0) * 0.4)
-    vc.fillStyle = 'rgba(0,0,0,' + fade + ')'; vc.fillRect(0, 0, VW, VH)
-    vc.fillStyle = '#FF0000'; vc.font = '10px monospace'; vc.textAlign = 'center'
-    vc.fillText('GROUNDED!', VW/2, VH/2 - 8)
-    vc.fillStyle = '#FFF'; vc.font = '5px monospace'
-    vc.fillText(g.deathReason, VW/2, VH/2 + 4)
-    vc.textAlign = 'left'
+    const fade=Math.min(0.8,(g.deathTimer||0)*0.4)
+    vc.fillStyle='rgba(0,0,0,'+fade+')'; vc.fillRect(0, 0, canvas.width, canvas.height)
+    vc.fillStyle='#FF0000'; vc.font=`${Math.max(16,ss(10))}px monospace`; vc.textAlign='center'
+    vc.fillText('GROUNDED!', canvas.width/2, canvas.height/2-ss(8))
+    vc.fillStyle='#FFF'; vc.font=`${Math.max(10,ss(5))}px monospace`
+    vc.fillText(g.deathReason, canvas.width/2, canvas.height/2+ss(4))
+    vc.textAlign='left'
   }
 
-  if (g.flashTimer > 0 && g.flashColor) {
-    vc.fillStyle = g.flashColor; vc.globalAlpha = g.flashTimer * 0.4
-    vc.fillRect(0, 0, VW, VH); vc.globalAlpha = 1
+  if (g.flashTimer>0 && g.flashColor) {
+    vc.fillStyle=g.flashColor; vc.globalAlpha=g.flashTimer*0.4
+    vc.fillRect(0, 0, canvas.width, canvas.height); vc.globalAlpha=1
   }
 
   vc.restore()
