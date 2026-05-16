@@ -164,11 +164,6 @@ function drawGlitch() {
   }
 }
 
-function drawScanlines() {
-  vc.fillStyle = 'rgba(0,0,0,0.15)'
-  for (let y = 0; y < VH; y += 2) vc.fillRect(0, y, VW, 1)
-}
-
 // ── 6. LEVEL DATA ────────────────────────────────────────────
 const LEVELS = [
   {
@@ -351,80 +346,128 @@ function initGame(levelIdx) {
     cameraX: 0,
     nextRandomEvent: 8,
     nearItem: null,
+    scorePopups: [],
   }
+}
+
+// ── DRAWING HELPERS ──────────────────────────────────────────
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r)
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r)
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r)
+  ctx.closePath()
+}
+
+function hexAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16)
+  const g = parseInt(hex.slice(3,5), 16)
+  const b = parseInt(hex.slice(5,7), 16)
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')'
+}
+
+// ── BACKGROUND PARTICLES ─────────────────────────────────────
+const bgParticles = Array.from({length: 20}, () => ({
+  x: Math.random() * VW,
+  y: Math.random() * VH,
+  vx: (Math.random() - 0.5) * 0.15,
+  vy: -0.1 - Math.random() * 0.2,
+  c: ['#FF69B4','#9B59B6','#00FFFF'][Math.floor(Math.random() * 3)]
+}))
+
+function updateBgParticles() {
+  bgParticles.forEach(p => {
+    p.x += p.vx; p.y += p.vy
+    if (p.y < -4) { p.y = VH + 4; p.x = Math.random() * VW }
+    if (p.x < -4) p.x = VW + 4
+    if (p.x > VW + 4) p.x = -4
+  })
+}
+
+// ── SHARED ANIMATED MENU BG ──────────────────────────────────
+function drawMenuBg() {
+  vc.fillStyle = '#0A0A0F'; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = 'rgba(26,10,46,0.8)'; vc.fillRect(0, 0, VW, VH)
+  const go = (menuTime * 20) % 12
+  vc.strokeStyle = 'rgba(0,255,255,0.10)'; vc.lineWidth = 0.5
+  for (let y = -go; y < VH; y += 12) { vc.beginPath(); vc.moveTo(0, y); vc.lineTo(VW, y); vc.stroke() }
+  for (let x = 0; x < VW; x += 20)  { vc.beginPath(); vc.moveTo(x, 0); vc.lineTo(x, VH); vc.stroke() }
+  bgParticles.forEach(p => {
+    vc.fillStyle = p.c; vc.globalAlpha = 0.5
+    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
+    vc.globalAlpha = 1
+  })
 }
 
 // ── PLAYER DRAW ──────────────────────────────────────────────
 function drawPlayer(g) {
-  const px   = Math.round(g.x - g.cameraX)
-  const py   = Math.round(g.y)
+  if (g.invincible > 0 && Math.floor(g.invincible * 10) % 2 === 0) return
+  const px = Math.round(g.x - g.cameraX), py = Math.round(g.y)
+  const w = PLAYER_W, h = PLAYER_H
+  const skin = SKINS[g.skin] || SKINS['default']
+  const bc = skin.color, dc = skin.darkColor
   const flip = !g.facingRight
 
-  if (g.invincible > 0 && Math.floor(g.invincible * 10) % 2 === 0) return
-
-  const skin = SKINS[g.skin] || SKINS['default']
-  const bodyC = skin.color
-
   vc.save()
-  if (flip) {
-    vc.translate(px + PLAYER_W / 2, 0)
-    vc.scale(-1, 1)
-    vc.translate(-(px + PLAYER_W / 2), 0)
-  }
+  if (flip) { vc.translate(px + w/2, 0); vc.scale(-1, 1); vc.translate(-(px + w/2), 0) }
 
-  const walk = Math.floor(g.animFrame % 4)
+  // Body shadow
+  vc.fillStyle = 'rgba(0,0,0,0.25)'; vc.fillRect(px + 2, py + h - 1, w - 2, 2)
 
-  // Legs
-  vc.fillStyle = skin.darkColor
-  if (g.onGround) {
-    if (walk < 2) {
-      vc.fillRect(px,     py + 11, 3, 3)
-      vc.fillRect(px + 7, py + 12, 3, 2)
-    } else {
-      vc.fillRect(px + 1, py + 11, 3, 3)
-      vc.fillRect(px + 6, py + 11, 3, 3)
-    }
+  // Legs (animated walk cycle)
+  const walk = Math.floor(g.animFrame % 4); vc.fillStyle = dc
+  if (!g.onGround) {
+    vc.fillRect(px + 1, py + h - 3, 3, 3); vc.fillRect(px + 6, py + h - 3, 3, 3)
+  } else if (walk < 2) {
+    vc.fillRect(px, py + h - 2, 3, 4); vc.fillRect(px + 7, py + h - 4, 3, 2)
   } else {
-    vc.fillRect(px + 1, py + 11, 3, 3)
-    vc.fillRect(px + 6, py + 11, 3, 3)
+    vc.fillRect(px + 1, py + h - 4, 3, 2); vc.fillRect(px + 6, py + h - 2, 3, 4)
   }
 
   // Body
-  vc.fillStyle = bodyC
-  vc.fillRect(px, py + 4, PLAYER_W, 8)
+  vc.fillStyle = bc
+  vc.fillRect(px + 1, py + 5, w - 2, h - 6)
 
   // Head
-  vc.fillRect(px + 1, py, PLAYER_W - 2, 6)
-
-  // Snout
-  vc.fillStyle = skin.darkColor
-  vc.fillRect(px + 6, py + 2, 4, 3)
-
-  // Eyes
-  vc.fillStyle = '#111111'
-  vc.fillRect(px + 2, py + 1, 2, 2)
-  vc.fillRect(px + 6, py + 1, 2, 2)
-
-  // Nostrils
-  vc.fillStyle = skin.darkColor
-  vc.fillRect(px + 7, py + 3, 1, 1)
-  vc.fillRect(px + 9, py + 3, 1, 1)
+  vc.fillRect(px + 1, py + 1, w - 2, 5)
+  vc.fillRect(px + 2, py, w - 4, 2)
 
   // Ears
-  vc.fillStyle = bodyC
-  vc.fillRect(px,     py - 2, 3, 3)
-  vc.fillRect(px + 7, py - 2, 3, 3)
+  vc.fillRect(px, py - 2, 3, 3); vc.fillRect(px + 7, py - 2, 3, 3)
+  vc.fillStyle = '#FFB6C1'
+  vc.fillRect(px + 1, py - 1, 1, 2); vc.fillRect(px + 8, py - 1, 1, 2)
 
-  // Chaos aura
+  // Snout
+  vc.fillStyle = '#FFB6C1'
+  vc.fillRect(px + 6, py + 2, 4, 3)
+
+  // Nostrils
+  vc.fillStyle = dc
+  vc.fillRect(px + 7, py + 3, 1, 1); vc.fillRect(px + 9, py + 3, 1, 1)
+
+  // Eyes
+  vc.fillStyle = '#FFFFFF'
+  vc.fillRect(px + 2, py + 1, 3, 3); vc.fillRect(px + 6, py + 1, 3, 3)
+  vc.fillStyle = '#111111'
+  vc.fillRect(px + 3, py + 2, 2, 2); vc.fillRect(px + 7, py + 2, 2, 2)
+
+  // Chaos glow aura
   if (g.chaos > 50) {
-    const glowC = g.chaos > 75 ? '#FF0000' : '#FF69B4'
-    vc.globalAlpha = (g.chaos - 50) / 100
-    vc.fillStyle   = glowC
-    vc.fillRect(px - 2, py - 2, PLAYER_W + 4, PLAYER_H + 4)
+    const glowPct = (g.chaos - 50) / 50
+    vc.globalAlpha = glowPct * 0.35 * (0.7 + 0.3 * Math.sin(menuTime * 6))
+    vc.fillStyle = g.chaos > 75 ? '#FF0000' : '#9B59B6'
+    vc.fillRect(px - 2, py - 3, w + 4, h + 5)
     vc.globalAlpha = 1
   }
 
   vc.restore()
+
+  // Trail when moving fast
+  if (Math.abs(g.vx) > 1 && g.onGround && save.settings && Math.random() > 0.5) {
+    spawnParticle(px + w/2, py + h - 2, skin.color, (Math.random() - 0.5) * 0.5, -0.3, 0.3, 1)
+  }
 }
 
 // ── 8. ENEMY SYSTEM ──────────────────────────────────────────
@@ -657,6 +700,16 @@ function doAction(g) {
   sfxBreak(); sfxChaos()
   triggerShakeG(g, 2, 0.2)
   checkObjectives(g)
+  // Score popup
+  if (!g.scorePopups) g.scorePopups = []
+  g.scorePopups.push({
+    text: '+' + item.points,
+    x: item.x + item.w/2,
+    y: item.y - 4,
+    life: 1.2,
+    color: '#F1C40F',
+    vy: -0.5
+  })
   g.nearItem = null
 }
 
@@ -676,59 +729,104 @@ function checkObjectives(g) {
 // ── 12. CHAOS METER ──────────────────────────────────────────
 function drawChaosBar(g) {
   const pct = g.chaos / 100
-  const bx = 4, by = 4, bw = 60, bh = 6
-  vc.fillStyle = '#222'; vc.fillRect(bx, by, bw, bh)
-  const col = pct < 0.25 ? '#00FF00' : pct < 0.5 ? '#FFFF00' : pct < 0.75 ? '#FF8800' : '#FF0000'
-  vc.fillStyle = col
-  vc.fillRect(bx, by, Math.round(bw * pct), bh)
-  vc.strokeStyle = '#FFF'; vc.lineWidth = 0.5
+  const bx = VW/2 - 40, by = 2, bw = 80, bh = 8
+  vc.fillStyle = 'rgba(0,0,0,0.6)'; vc.fillRect(bx - 1, by - 1, bw + 2, bh + 2)
+  const col = pct < 0.25 ? '#2ECC71' : pct < 0.5 ? '#F1C40F' : pct < 0.75 ? '#E67E22' : '#E74C3C'
+  const pulse = g.chaos > 75 ? 0.7 + 0.3 * Math.sin(menuTime * 8) : 1
+  vc.save()
+  if (g.chaos > 75) { vc.shadowColor = col; vc.shadowBlur = 8 * pulse }
+  vc.fillStyle = col; vc.fillRect(bx, by, Math.round(bw * pct), bh)
+  vc.strokeStyle = g.chaos > 75 ? col : 'rgba(150,0,255,0.8)'; vc.lineWidth = 0.5
   vc.strokeRect(bx, by, bw, bh)
-  vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'left'
-  vc.fillText('CHAOS', bx, by - 1)
+  vc.shadowBlur = 0; vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'center'
+  vc.fillText('CHAOS ' + Math.round(g.chaos) + '%', VW/2, by + bh + 5)
   if (g.chaos >= 100) {
-    vc.fillStyle = 'rgba(255,0,0,' + (0.3 + 0.3 * Math.sin(Date.now() * 0.01)) + ')'
-    vc.fillRect(0, 0, VW, VH)
-    vc.fillStyle = '#FFF'; vc.textAlign = 'center'; vc.font = '8px monospace'
-    vc.fillText('ESCAPE NOW!', VW / 2, VH / 2)
-    vc.textAlign = 'left'
+    const wig = Math.floor(menuTime * 20) % 2 === 0 ? 0 : 1
+    vc.fillStyle = 'rgba(255,0,0,' + (0.4 + 0.3 * Math.sin(menuTime * 10)) + ')'
+    vc.fillRect(wig, 18, VW, 10)
+    vc.fillStyle = '#FFF'; vc.font = '6px monospace'
+    vc.fillText('ESCAPE NOW!', VW/2 + wig, 25)
   }
+  vc.restore()
 }
 
 // ── 13. HUD ──────────────────────────────────────────────────
 function drawHUD(g) {
-  // HP hearts
+  // Top-left: score + coins panel
+  vc.font = '5px monospace'; vc.textAlign = 'left'
+  vc.fillStyle = 'rgba(0,0,0,0.5)'; vc.fillRect(2, 2, 70, 20)
+  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 6
+  vc.fillStyle = 'rgba(255,255,255,0.6)'; vc.fillText('SCORE', 5, 10)
+  vc.fillStyle = '#00FFFF'; vc.font = '6px monospace'
+  vc.fillText(g.score.toLocaleString(), 5, 18)
+  vc.shadowBlur = 0
+  vc.fillStyle = '#F1C40F'; vc.font = '5px monospace'
+  vc.fillText('$ ' + g.coins, 5, 26)
+
+  // Top-right: level + timer
+  vc.textAlign = 'right'
+  vc.fillStyle = 'rgba(0,0,0,0.5)'; vc.fillRect(VW - 72, 2, 70, 20)
+  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 6; vc.fillStyle = '#FF69B4'
+  vc.font = '5px monospace'
+  vc.fillText('LV.' + (g.level + 1), VW - 5, 10)
+  vc.shadowBlur = 0; vc.fillStyle = 'rgba(255,255,255,0.7)'; vc.font = '4px monospace'
+  vc.fillText(LEVELS[g.level].name.substring(0, 14), VW - 5, 18)
+  const timeLeft = Math.max(0, LEVELS[g.level].duration - g.time)
+  const timerBlink = timeLeft < 5 && Math.floor(menuTime * 4) % 2 === 0
+  const timerCol = timeLeft < 15 ? (timerBlink ? '#FF0000' : '#FF4400') : '#FFF'
+  vc.fillStyle = timerCol; vc.fillText(Math.ceil(timeLeft) + 's', VW - 5, 26)
+
+  // Chaos bar — center top
+  drawChaosBar(g)
+
+  // Bottom-left: HP hearts
   for (let i = 0; i < g.maxHp; i++) {
     vc.fillStyle = i < g.hp ? '#FF3333' : '#333'
-    vc.fillRect(4 + i * 10, 14, 8, 7)
-    vc.fillRect(5 + i * 10, 13, 6, 2)
-    vc.fillRect(4 + i * 10, 14, 3, 2)
-    vc.fillRect(7 + i * 10, 14, 3, 2)
+    vc.fillRect(4 + i * 10, VH - 10, 4, 4)
+    vc.fillRect(2 + i * 10, VH - 12, 3, 3)
+    vc.fillRect(5 + i * 10, VH - 12, 3, 3)
+    vc.fillRect(3 + i * 10, VH - 13, 4, 2)
   }
-  // Score
-  vc.fillStyle = '#FFD700'; vc.font = '5px monospace'; vc.textAlign = 'right'
-  vc.fillText(g.score + 'pts', VW - 4, 9)
-  // Level name
-  vc.fillStyle = '#FFF'; vc.textAlign = 'center'
-  vc.fillText('LV.' + (g.level + 1) + ': ' + LEVELS[g.level].name, VW / 2, 9)
-  // Objectives
+
+  // Bottom-center: interact hint
+  if (g.nearItem && !g.nearItem.broken) {
+    vc.fillStyle = 'rgba(0,0,0,0.75)'; vc.fillRect(VW/2 - 28, VH - 14, 56, 11)
+    vc.shadowColor = '#F1C40F'; vc.shadowBlur = 6
+    vc.fillStyle = '#F1C40F'; vc.font = '4px monospace'; vc.textAlign = 'center'
+    vc.fillText('[SPC] ' + g.nearItem.type.toUpperCase(), VW/2, VH - 7)
+    vc.shadowBlur = 0
+  }
+
+  // Bottom-right: objectives
   vc.textAlign = 'right'; vc.font = '4px monospace'
   g.objectives.forEach((obj, i) => {
-    vc.fillStyle = obj.done ? '#00FF88' : '#AAAAFF'
-    vc.fillText((obj.done ? '✓ ' : 'o ') + obj.text, VW - 2, 18 + i * 7)
+    vc.fillStyle = obj.done ? '#2ECC71' : 'rgba(255,255,255,0.5)'
+    vc.fillText((obj.done ? '✓ ' : '· ') + obj.text.substring(0, 16), VW - 2, VH - 14 + i * 6)
   })
-  // Chaos bar
-  drawChaosBar(g)
-  // Interact hint
-  if (g.nearItem && !g.nearItem.broken) {
-    vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(VW/2 - 30, VH - 18, 60, 10)
-    vc.fillStyle = '#FFF'; vc.textAlign = 'center'; vc.font = '4px monospace'
-    vc.fillText('[SPC/E] ' + g.nearItem.type.toUpperCase(), VW / 2, VH - 11)
-  }
+
   // Boss objective note for level 6
   if (g.level === 5 && !g.bossSpawned) {
     vc.fillStyle = '#FFD700'; vc.textAlign = 'center'; vc.font = '4px monospace'
     vc.fillText('RAISE CHAOS TO 40% TO SUMMON BOSS', VW / 2, VH / 2 - 20)
   }
+
+  // Score popups
+  if (!g.scorePopups) g.scorePopups = []
+  const dt_approx = 0.016
+  g.scorePopups = g.scorePopups.filter(p => {
+    p.y += p.vy
+    p.x += (Math.random() - 0.5) * 0.3
+    p.life -= dt_approx
+    const a = Math.max(0, Math.min(1, p.life))
+    vc.globalAlpha = a
+    vc.fillStyle = p.color
+    vc.font = '6px monospace'; vc.textAlign = 'center'
+    vc.shadowColor = p.color; vc.shadowBlur = 5
+    vc.fillText(p.text, Math.round(p.x - g.cameraX), Math.round(p.y))
+    vc.globalAlpha = 1; vc.shadowBlur = 0
+    return p.life > 0
+  })
+
   vc.textAlign = 'left'
 }
 
@@ -744,48 +842,114 @@ function lightenColor(hex) {
 }
 
 function drawBackground(g, lvl) {
-  if (lvl.id === 1) {
-    vc.fillStyle = '#2A1A4A'; vc.fillRect(0, 80, VW, 84)
-    vc.fillStyle = '#87CEEB'; vc.fillRect(240, 40, 50, 40)
-    vc.fillStyle = '#4A4A8A'
-    vc.fillRect(240, 40, 2, 40); vc.fillRect(265, 40, 2, 40); vc.fillRect(240, 59, 50, 2)
-  } else if (lvl.id === 2) {
-    vc.fillStyle = '#0A2A0A'; vc.fillRect(0, 0, VW, VH)
-    // Chalkboard
-    vc.fillStyle = '#1A4A1A'; vc.fillRect(20, 20, 80, 50)
-    vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'left'
-    vc.fillText('2+2=5', 30, 45)
-    vc.textAlign = 'left'
-  } else if (lvl.id === 3) {
-    vc.fillStyle = '#87CEEB'; vc.fillRect(0, 0, VW, 100)
-    vc.fillStyle = '#4A90D9'; vc.fillRect(0, 100, VW, 64)
-    vc.fillStyle = '#F1C40F'; vc.fillRect(280, 20, 20, 20)
-  } else if (lvl.id === 4) {
-    vc.fillStyle = '#2A1A2A'; vc.fillRect(0, 0, VW, VH)
-    // Neon signs
-    vc.fillStyle = '#FF00FF'
-    vc.fillRect(10, 30, 30, 12); vc.fillRect(260, 25, 40, 12)
-    vc.fillStyle = '#000'; vc.font = '4px monospace'; vc.textAlign = 'center'
-    vc.fillText('SHOP', 25, 39); vc.fillText('MALL', 280, 34)
-    vc.textAlign = 'left'
-  } else if (lvl.id === 5) {
-    vc.fillStyle = '#0A1A0A'; vc.fillRect(0, 0, VW, VH)
-    // Houses
-    vc.fillStyle = '#3A2A1A'
-    vc.fillRect(10, 100, 40, 64); vc.fillRect(270, 95, 40, 69)
-    vc.fillStyle = '#5A3A2A'
-    vc.fillRect(10, 90, 40, 14); vc.fillRect(270, 85, 40, 14)
-    // Windows
-    vc.fillStyle = '#FFFF00'
-    vc.fillRect(20, 110, 8, 8); vc.fillRect(35, 110, 8, 8)
-    vc.fillRect(280, 105, 8, 8); vc.fillRect(295, 105, 8, 8)
-  } else if (lvl.id === 6) {
-    const t = Date.now() * 0.001
-    vc.fillStyle = 'rgba(50,0,100,' + (0.5 + 0.3 * Math.sin(t)) + ')'
-    vc.fillRect(0, 0, VW, VH)
-    for (let i = 0; i < 5; i++) {
-      vc.fillStyle = 'rgba(150,0,255,' + (Math.random() * 0.3) + ')'
-      vc.fillRect(Math.random() * VW, Math.random() * VH, Math.random() * 40 + 5, 2 + Math.random() * 8)
+  switch (lvl.id) {
+    case 1: { // Bedroom — soft purple night
+      vc.fillStyle = '#2A1540'; vc.fillRect(0, 0, VW, VH)
+      // Window frame
+      vc.fillStyle = '#1A3A5A'; vc.fillRect(240, 20, 50, 50)
+      vc.fillStyle = '#87CEEB'; vc.fillRect(242, 22, 22, 22); vc.fillRect(266, 22, 22, 22)
+      vc.fillRect(242, 46, 22, 22); vc.fillRect(266, 46, 22, 22)
+      vc.fillStyle = '#4A3060'; vc.fillRect(263, 22, 3, 46); vc.fillRect(242, 43, 46, 3)
+      // Moon
+      vc.fillStyle = '#FFFACD'; vc.fillRect(250, 28, 12, 12); vc.fillRect(252, 26, 8, 2)
+      // Stars
+      vc.fillStyle = 'rgba(255,255,220,0.6)'
+      ;[[10,15],[30,8],[200,25],[300,12],[15,50]].forEach(function(s) { vc.fillRect(s[0], s[1], 1, 1); vc.fillRect(s[0]+1, s[1], 1, 1) })
+      // Wallpaper dots
+      vc.fillStyle = 'rgba(160,100,220,0.12)'
+      for (let x = 0; x < VW; x += 16) for (let y = 0; y < VH; y += 16) vc.fillRect(x + 7, y + 7, 2, 2)
+      // Rug/floor
+      vc.fillStyle = '#3D2060'; vc.fillRect(0, 155, VW, 9)
+      vc.fillStyle = 'rgba(255,200,100,0.15)'
+      for (let x = 0; x < VW; x += 10) vc.fillRect(x, 155, 5, 9)
+      break
+    }
+    case 2: { // School — yellow classroom
+      vc.fillStyle = '#D4C17F'; vc.fillRect(0, 0, VW, VH)
+      vc.fillStyle = '#2C6E3F'; vc.fillRect(0, 30, VW, 60)
+      vc.fillStyle = 'rgba(255,255,255,0.15)'; vc.font = '6px monospace'; vc.textAlign = 'left'
+      vc.fillText('2+2=5  ABC  XYZ', 10, 50)
+      vc.fillText('HOMEWORK DUE', 10, 65)
+      vc.fillStyle = '#CCC'; vc.fillRect(0, 140, VW, VH)
+      vc.fillStyle = '#AAA'
+      for (let x = 0; x < VW; x += 20) vc.fillRect(x, 140, 1, VH)
+      for (let y = 140; y < VH; y += 15) vc.fillRect(0, y, VW, 1)
+      break
+    }
+    case 3: { // Beach — sunny
+      vc.fillStyle = '#87CEEB'; vc.fillRect(0, 0, VW, 100)
+      vc.fillStyle = '#B0E2FF'; vc.fillRect(0, 0, VW, 50)
+      // Sun
+      vc.fillStyle = '#FFD700'; vc.fillRect(260, 10, 22, 22)
+      vc.fillStyle = 'rgba(255,220,0,0.4)'
+      for (let a = 0; a < 8; a++) {
+        const ra = a * Math.PI / 4
+        const rx = 271 + Math.cos(ra) * 15, ry = 21 + Math.sin(ra) * 15
+        vc.fillRect(rx, ry, 3, 3)
+      }
+      // Sea
+      vc.fillStyle = '#1A78C2'; vc.fillRect(0, 100, VW, 64)
+      vc.fillStyle = 'rgba(255,255,255,0.25)'
+      for (let x = 0; x < VW; x += 30) vc.fillRect(x + ((menuTime * 15) | 0) % 30, 110, 15, 2)
+      // Sandy ground
+      vc.fillStyle = '#F4D03F'; vc.fillRect(0, 148, VW, VH)
+      // Palm tree
+      vc.fillStyle = '#5D4037'; vc.fillRect(40, 115, 5, 35)
+      vc.fillStyle = '#2ECC71'
+      ;[[-15,-8,20,8],[-10,-16,18,6],[0,-20,12,6],[10,-12,16,6],[8,-5,18,8]].forEach(function(t) {
+        vc.fillRect(40 + t[0], 115 + t[1], t[2], t[3])
+      })
+      break
+    }
+    case 4: { // Mall — bright neon
+      vc.fillStyle = '#F0E6FF'; vc.fillRect(0, 0, VW, VH)
+      vc.font = '5px monospace'; vc.textAlign = 'center'
+      ;[['SALE',40,'#FF69B4'],['SHOP',120,'#00FFFF'],['FOOD',200,'#F1C40F'],['EXIT',290,'#E74C3C']].forEach(function(s) {
+        vc.fillStyle = 'rgba(0,0,0,0.5)'; vc.fillRect(s[1] - 14, 25, 28, 12)
+        vc.shadowColor = s[2]; vc.shadowBlur = 6; vc.fillStyle = s[2]
+        vc.fillText(s[0], s[1], 34); vc.shadowBlur = 0
+      })
+      vc.fillStyle = '#E8D5FF'; vc.fillRect(0, 148, VW, VH)
+      vc.fillStyle = 'rgba(255,255,255,0.4)'
+      for (let x = 0; x < VW; x += 24) vc.fillRect(x, 148, 12, VH)
+      break
+    }
+    case 5: { // Neighborhood — green suburban
+      vc.fillStyle = '#87CEEB'; vc.fillRect(0, 0, VW, 100)
+      vc.fillStyle = '#FFFFFF'; vc.fillRect(100, 20, 40, 15); vc.fillRect(200, 15, 30, 12)
+      ;[[20,80],[120,85],[220,75],[290,82]].forEach(function(h) {
+        const hx = h[0], hy = h[1]
+        vc.fillStyle = '#CC8844'; vc.fillRect(hx, hy, 30, 30)
+        vc.fillStyle = '#882222'; vc.fillRect(hx - 3, hy - 8, 36, 10)
+        vc.fillStyle = '#4A3A2A'; vc.fillRect(hx + 11, hy + 15, 8, 15)
+        vc.fillStyle = '#87CEEB'; vc.fillRect(hx + 2, hy + 5, 8, 8); vc.fillRect(hx + 20, hy + 5, 8, 8)
+      })
+      vc.fillStyle = '#4CAF50'; vc.fillRect(0, 148, VW, VH)
+      vc.fillStyle = '#388E3C'
+      for (let x = 0; x < VW; x += 8) vc.fillRect(x, 148, 4, 3)
+      break
+    }
+    case 6: { // Void — black hole chaos
+      vc.fillStyle = '#000000'; vc.fillRect(0, 0, VW, VH)
+      const vt = menuTime * 0.5
+      for (let i = 0; i < 8; i++) {
+        const a = vt + i * Math.PI / 4, r = 20 + i * 5
+        const vx2 = VW/2 + Math.cos(a) * r, vy2 = VH/2 + Math.sin(a) * r
+        vc.fillStyle = 'rgba(' + (100 + i * 15) + ',0,' + (150 + i * 10) + ',' + (0.3 + i * 0.05) + ')'
+        vc.fillRect(vx2, vy2, 4 + i, 4 + i)
+      }
+      for (let i = 0; i < 15; i++) {
+        const angle = (i / 15) * Math.PI * 2 + (menuTime * 0.3)
+        const r = 40 + i * 4
+        const sx = VW/2 + Math.cos(angle) * r, sy = VH/2 + Math.sin(angle) * r
+        vc.fillStyle = 'rgba(255,255,255,' + (0.3 + Math.random() * 0.4) + ')'
+        vc.fillRect(sx, sy, 1, 1)
+      }
+      if (Math.random() > 0.7) {
+        vc.fillStyle = 'rgba(' + ((Math.random() * 255) | 0) + ',0,255,0.2)'
+        vc.fillRect(0, (Math.random() * VH) | 0, VW, 2 + ((Math.random() * 5) | 0))
+      }
+      break
     }
   }
 }
@@ -828,7 +992,7 @@ function drawLevel(g) {
   const canEscape = g.objectivesCompleted >= g.objectives.length || g.chaos >= 90 || g.bossDefeated
   if (canEscape) {
     const ez = Math.round(g.escapeX - g.cameraX)
-    vc.fillStyle = 'rgba(0,255,0,' + (0.3 + 0.2 * Math.sin(Date.now() * 0.008)) + ')'
+    vc.fillStyle = 'rgba(0,255,0,' + (0.3 + 0.2 * Math.sin(menuTime * 8)) + ')'
     vc.fillRect(ez, g.escapeY - 30, 14, 30)
     vc.fillStyle = '#00FF00'; vc.font = '4px monospace'; vc.textAlign = 'center'
     vc.fillText('EXIT', ez + 7, g.escapeY - 32)
@@ -914,7 +1078,6 @@ function update(dt) {
   if (g.level === 5 && !g.bossSpawned && g.chaos > 40) {
     g.boss = initBoss(); g.bossSpawned = true
     triggerShakeG(g, 8, 1.0); sfxBoss()
-    // Mark first 2 objectives done on boss spawn
     g.objectives[0].done = true; g.objectives[1].done = true
     g.objectivesCompleted = 2
   }
@@ -944,7 +1107,6 @@ function update(dt) {
   // Stomp enemies — player lands on top
   g.enemies.forEach(e => {
     if (e.hp <= 0) return
-    const ex = e.x - g.cameraX
     if (g.vy > 0 && g.x + PLAYER_W > e.x - 6 && g.x < e.x + 12 &&
         g.y + PLAYER_H > e.y && g.y + PLAYER_H < e.y + 8) {
       e.hp--; g.vy = -4
@@ -956,6 +1118,15 @@ function update(dt) {
 }
 
 // ── 18. RENDER ───────────────────────────────────────────────
+function drawPostFX() {
+  const vg = vc.createRadialGradient(VW/2, VH/2, VH * 0.25, VW/2, VH/2, VW * 0.7)
+  vg.addColorStop(0, 'rgba(0,0,0,0)')
+  vg.addColorStop(1, 'rgba(0,0,0,0.55)')
+  vc.fillStyle = vg; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = 'rgba(0,0,0,0.08)'
+  for (let y = 0; y < VH; y += 2) vc.fillRect(0, y, VW, 1)
+}
+
 function render() {
   if (!game) return
   const g = game
@@ -995,11 +1166,16 @@ function render() {
 let menuItems  = []
 let menuHovX   = -1
 let menuHovY   = -1
+let menuHovered = -1
 
-function clearButtons() { menuItems = [] }
+function clearButtons() { menuItems = []; menuHovered = -1 }
 
 function registerButton(x, y, w, h, action) {
+  const idx = menuItems.length
   menuItems.push({ x, y, w, h, action })
+  if (menuHovX >= x && menuHovX <= x + w && menuHovY >= y && menuHovY <= y + h) {
+    menuHovered = idx
+  }
 }
 
 function isHovered(x, y, w, h) {
@@ -1007,45 +1183,58 @@ function isHovered(x, y, w, h) {
 }
 
 function drawButton(x, y, w, h, text, highlighted, color) {
-  if (color === undefined) color = C.PINK
-  vc.fillStyle   = highlighted ? color : '#333355'
-  vc.fillRect(x, y, w, h)
-  vc.strokeStyle = highlighted ? '#FFF' : '#666688'
-  vc.lineWidth   = 0.5
-  vc.strokeRect(x, y, w, h)
-  vc.fillStyle = highlighted ? '#FFFFFF44' : '#FFFFFF22'
-  vc.fillRect(x, y, w, 1); vc.fillRect(x, y, 1, h)
+  if (color === undefined) color = '#FF69B4'
+  const glow = highlighted ? 15 : 6
+  vc.save()
+  vc.shadowColor = color; vc.shadowBlur = glow
+  vc.fillStyle = hexAlpha(color, highlighted ? 0.35 : 0.18)
+  roundRect(vc, x, y, w, h, 3)
+  vc.fill()
+  vc.strokeStyle = color; vc.lineWidth = highlighted ? 1.5 : 1
+  roundRect(vc, x, y, w, h, 3)
+  vc.stroke()
+  vc.fillStyle = 'rgba(255,255,255,0.15)'
+  roundRect(vc, x, y, w, 2, 3)
+  vc.fill()
+  vc.shadowBlur = 4
   vc.fillStyle = '#FFF'
-  const fs = Math.min(6, Math.max(3, Math.floor(h * 0.38)))
-  vc.font = fs + 'px monospace'
+  vc.font = Math.min(6, h * 0.38) + 'px monospace'
   vc.textAlign = 'center'; vc.textBaseline = 'middle'
   vc.fillText(text, x + w/2, y + h/2)
-  vc.textBaseline = 'alphabetic'; vc.textAlign = 'left'
+  vc.textBaseline = 'alphabetic'; vc.shadowBlur = 0
+  vc.restore()
 }
 
 // Map real coords → virtual
-function realToVirt(cx, cy) {
+function screenToVirtual(cx, cy) {
+  const rect = canvas.getBoundingClientRect()
+  const scaleX = canvas.width / rect.width
+  const scaleY = canvas.height / rect.height
+  const screenX = (cx - rect.left) * scaleX
+  const screenY = (cy - rect.top)  * scaleY
   const scale = Math.min(canvas.width / VW, canvas.height / VH)
-  const ox    = (canvas.width  - VW * scale) / 2
-  const oy    = (canvas.height - VH * scale) / 2
-  return {
-    vx: (cx - ox) / scale,
-    vy: (cy - oy) / scale,
-  }
+  const ox = (canvas.width  - VW * scale) / 2
+  const oy = (canvas.height - VH * scale) / 2
+  return { x: (screenX - ox) / scale, y: (screenY - oy) / scale }
+}
+
+function realToVirt(cx, cy) {
+  const v = screenToVirtual(cx, cy)
+  return { vx: v.x, vy: v.y }
 }
 
 function handleClick(cx, cy) {
-  const { vx, vy } = realToVirt(cx, cy)
+  const v = screenToVirtual(cx, cy)
   for (const item of menuItems) {
-    if (vx >= item.x && vx <= item.x + item.w && vy >= item.y && vy <= item.y + item.h) {
-      item.action(vx, vy); sfxMenu(); return
+    if (v.x >= item.x && v.x <= item.x + item.w && v.y >= item.y && v.y <= item.y + item.h) {
+      item.action(v.x, v.y); sfxMenu(); return
     }
   }
 }
 
 function handleMouseMove(cx, cy) {
-  const { vx, vy } = realToVirt(cx, cy)
-  menuHovX = vx; menuHovY = vy
+  const v = screenToVirtual(cx, cy)
+  menuHovX = v.x; menuHovY = v.y
 }
 
 canvas.addEventListener('click',     e => handleClick(e.clientX, e.clientY))
@@ -1109,148 +1298,195 @@ document.addEventListener('keyup', e => {
 
 // ── 22. SCREEN RENDERERS ─────────────────────────────────────
 
-// --- MENU ---
-let menuTime    = 0
+let menuTime = 0
 let selectedLevel = 0
 
+// --- MENU ---
 function renderMenu() {
   clearButtons()
-  const t = menuTime
 
   // Background
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = '#0A0A0F'; vc.fillRect(0, 0, VW, VH)
+  const bgGrad = vc.createLinearGradient(0, 0, 0, VH)
+  bgGrad.addColorStop(0, '#0A0A0F')
+  bgGrad.addColorStop(1, '#1A0A2E')
+  vc.fillStyle = bgGrad; vc.fillRect(0, 0, VW, VH)
 
-  // Animated grid
-  vc.strokeStyle = 'rgba(255,105,180,0.07)'; vc.lineWidth = 0.5
-  const scroll = (t * 20) % 30
-  for (let y = -scroll; y < VH; y += 30) { vc.beginPath(); vc.moveTo(0, y); vc.lineTo(VW, y); vc.stroke() }
-  for (let x = 0; x < VW; x += 40) { vc.beginPath(); vc.moveTo(x, 0); vc.lineTo(x, VH); vc.stroke() }
+  // Scrolling cyan grid
+  const gridOff = (menuTime * 20) % 12
+  vc.strokeStyle = 'rgba(0,255,255,0.15)'; vc.lineWidth = 0.5
+  for (let y = -gridOff; y < VH; y += 12) { vc.beginPath(); vc.moveTo(0, y); vc.lineTo(VW, y); vc.stroke() }
+  for (let x = 0; x < VW; x += 20)        { vc.beginPath(); vc.moveTo(x, 0); vc.lineTo(x, VH); vc.stroke() }
 
-  // Bouncing pig decoration
-  const pigY = 28 + Math.sin(t * 2) * 3
-  drawDecoPig(VW / 2 - 5, pigY)
+  // Starfield
+  vc.fillStyle = 'rgba(255,255,255,0.4)'
+  ;[[12,8],[40,22],[80,6],[140,14],[190,5],[240,19],[290,9],[30,40],[100,35],[200,42],[260,30],[310,38],[55,55],[160,60],[280,55]].forEach(function(s, idx) {
+    const twinkle = 0.3 + 0.4 * Math.sin(menuTime * 1.5 + idx * 0.8)
+    vc.globalAlpha = twinkle
+    vc.fillRect(s[0], s[1], 1, 1)
+  })
+  vc.globalAlpha = 1
 
-  // Title
-  vc.fillStyle = C.PINK; vc.font = 'bold 14px monospace'; vc.textAlign = 'center'
-  vc.fillText('PEPPA', VW / 2, 50)
-  vc.fillStyle = C.PURPLE
-  vc.fillText('CHAOS', VW / 2, 62)
-
-  // Glitch title flicker
-  if (Math.random() < 0.02) {
-    vc.globalAlpha = 0.7; vc.fillStyle = C.CYAN
-    vc.fillText('CHAOS', VW / 2 + (Math.random() - 0.5) * 6, 62)
+  // Ambient floating particles
+  bgParticles.forEach(p => {
+    vc.fillStyle = p.c; vc.globalAlpha = 0.5
+    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
     vc.globalAlpha = 1
+  })
+
+  // Stats corners
+  vc.font = '5px monospace'
+  const hiScore = save.highScores.reduce((a, b) => Math.max(a, b), 0)
+  vc.fillStyle = '#F1C40F'; vc.textAlign = 'left'
+  vc.fillText('HI ' + hiScore.toLocaleString(), 3, 8)
+  vc.textAlign = 'right'
+  vc.fillText('COINS ' + save.coins.toLocaleString(), VW - 3, 8)
+
+  // Title "PEPPA CHAOS"
+  const titlePulse = 0.85 + 0.15 * Math.sin(menuTime * 3)
+  const titleY = 35
+
+  // PEPPA
+  vc.save()
+  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 12
+  vc.fillStyle = '#FF69B4'
+  vc.font = '14px monospace'; vc.textAlign = 'center'
+  vc.translate(VW/2, titleY)
+  vc.scale(titlePulse, titlePulse)
+  vc.fillText('PEPPA', 0, 0)
+  vc.restore()
+
+  // CHAOS with glitch
+  const glitchOff = (Math.floor(menuTime * 2) % 2 === 0) ? 0 : (Math.random() > 0.7 ? (Math.random() - 0.5) * 3 : 0)
+  vc.save()
+  vc.shadowColor = '#9B59B6'; vc.shadowBlur = 12
+  vc.fillStyle = '#9B59B6'
+  vc.font = '14px monospace'; vc.textAlign = 'center'
+  vc.translate(VW/2 + glitchOff, titleY + 16)
+  vc.scale(titlePulse, titlePulse)
+  vc.fillText('CHAOS', 0, 0)
+  vc.restore()
+
+  // Subtitle
+  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 4
+  vc.fillStyle = '#00FFFF'; vc.font = '5px monospace'; vc.textAlign = 'center'
+  vc.fillText('2D PIXEL CHAOS', VW/2, titleY + 26)
+  vc.shadowBlur = 0
+
+  // Press start blink
+  if (Math.floor(menuTime * 1.25) % 2 === 0) {
+    vc.fillStyle = '#FFFFFF'; vc.font = '6px monospace'; vc.textAlign = 'center'
+    vc.fillText('PRESS START', VW/2, titleY + 37)
   }
 
-  // Stats
-  vc.fillStyle = C.YELLOW; vc.font = '4px monospace'
-  vc.fillText('COINS: ' + save.coins, VW / 2, 72)
-
   // Buttons
-  const bw = 70, bh = 11, bx = VW/2 - bw/2
+  const bw = 80, bh = 12, bx = VW/2 - bw/2
   const btns = [
-    { label: 'PLAY',     col: C.PINK,   action: () => { startLevel(0) } },
-    { label: 'LEVELS',   col: C.BLUE,   action: () => { state = 'levelSelect' } },
-    { label: 'SHOP',     col: C.PURPLE, action: () => { state = 'shop' } },
-    { label: 'SETTINGS', col: C.CYAN,   action: () => { state = 'settings' } },
+    { label: 'PLAY',        col: '#FF69B4', action: () => { startLevel(0) } },
+    { label: 'LEVELS',      col: '#F1C40F', action: () => { state = 'levelSelect' } },
+    { label: 'SHOP',        col: '#9B59B6', action: () => { state = 'shop' } },
+    { label: 'SETTINGS',    col: '#00FFFF', action: () => { prevState = 'menu'; state = 'settings' } },
+    { label: 'HOW TO PLAY', col: '#2ECC71', action: () => { state = 'howtoplay' } },
   ]
+  const startBY = titleY + 46
   btns.forEach((b, i) => {
-    const by = 82 + i * (bh + 4)
+    const by = startBY + i * (bh + 3)
     const hi = isHovered(bx, by, bw, bh)
     drawButton(bx, by, bw, bh, b.label, hi, b.col)
     registerButton(bx, by, bw, bh, b.action)
   })
 
-  // Controls hint
-  vc.fillStyle = 'rgba(255,255,255,0.4)'; vc.font = '3px monospace'; vc.textAlign = 'center'
-  vc.fillText('A/D move  W/UP jump  SPC/E interact', VW / 2, VH - 3)
-  vc.textAlign = 'left'
+  vc.textAlign = 'left'; vc.shadowBlur = 0
 }
 
-function drawDecoPig(px, py) {
-  vc.fillStyle = C.PINK
-  vc.fillRect(px, py + 4, 10, 8)
-  vc.fillRect(px + 1, py, 8, 6)
-  vc.fillStyle = C.DPINK
-  vc.fillRect(px + 6, py + 2, 4, 3)
-  vc.fillStyle = '#111'
-  vc.fillRect(px + 2, py + 1, 2, 2)
-  vc.fillRect(px + 6, py + 1, 2, 2)
-  vc.fillStyle = C.PINK
-  vc.fillRect(px, py - 2, 3, 3)
-  vc.fillRect(px + 7, py - 2, 3, 3)
+// --- HOW TO PLAY ---
+function renderHowToPlay() {
+  clearButtons()
+  drawMenuBg()
+  vc.fillStyle = '#2ECC71'; vc.font = '7px monospace'; vc.textAlign = 'center'
+  vc.fillText('HOW TO PLAY', VW/2, 16)
+  const lines = [
+    ['MOVE', 'A/D or LEFT/RIGHT'],
+    ['JUMP', 'W or UP'],
+    ['ACTION', 'SPACE or E'],
+    ['PAUSE', 'ESC'],
+  ]
+  lines.forEach(function(pair, i) {
+    vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.font = '4px monospace'; vc.textAlign = 'left'
+    vc.fillText(pair[0], 20, 30 + i * 15)
+    vc.fillStyle = '#00FFFF'; vc.textAlign = 'right'; vc.fillText(pair[1], VW - 20, 30 + i * 15)
+  })
+  vc.fillStyle = 'rgba(255,255,255,0.4)'; vc.font = '4px monospace'; vc.textAlign = 'center'
+  vc.fillText('Break objects to fill CHAOS meter', VW/2, 92)
+  vc.fillText('Reach 90% to unlock EXIT', VW/2, 102)
+  vc.fillText('Escape before time runs out!', VW/2, 112)
+  drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
+  registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = 'menu' })
+  vc.textAlign = 'left'
 }
 
 // --- LEVEL SELECT ---
 function renderLevelSelect() {
   clearButtons()
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = C.CYAN; vc.font = 'bold 8px monospace'; vc.textAlign = 'center'
-  vc.fillText('SELECT LEVEL', VW / 2, 14)
-
-  const cols = 3, rows = 2
-  const cw = 90, ch = 50, padX = (VW - cols * cw) / 2, padY = 22
+  drawMenuBg()
+  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 10
+  vc.fillStyle = '#00FFFF'; vc.font = '8px monospace'; vc.textAlign = 'center'
+  vc.fillText('SELECT LEVEL', VW/2, 18)
+  vc.shadowBlur = 0
 
   LEVELS.forEach((lvl, i) => {
-    const col = i % cols, row = Math.floor(i / cols)
-    const x   = padX + col * cw + 3
-    const y   = padY + row * ch + 5
-    const w   = cw - 6, h = ch - 8
+    const col = i % 3, row = Math.floor(i / 3)
+    const bx = 8 + col * 104, by = 28 + row * 66, bw = 96, bh = 56
     const unlocked = save.unlockedLevels[i]
-    const hi       = isHovered(x, y, w, h)
-    const border   = unlocked ? (hi ? C.YELLOW : C.PINK) : C.GRAY
+    const hs = save.highScores[i]
 
-    vc.fillStyle = unlocked ? (hi ? 'rgba(255,105,180,0.3)' : 'rgba(255,105,180,0.1)') : 'rgba(50,50,80,0.5)'
-    vc.fillRect(x, y, w, h)
-    vc.strokeStyle = border; vc.lineWidth = 0.5; vc.strokeRect(x, y, w, h)
+    vc.fillStyle = unlocked ? 'rgba(255,105,180,0.12)' : 'rgba(0,0,0,0.4)'
+    roundRect(vc, bx, by, bw, bh, 3); vc.fill()
+    vc.strokeStyle = unlocked ? 'rgba(255,105,180,0.5)' : 'rgba(80,80,80,0.4)'
+    vc.lineWidth = unlocked ? 1 : 0.5; roundRect(vc, bx, by, bw, bh, 3); vc.stroke()
 
-    vc.fillStyle = unlocked ? '#FFF' : C.GRAY
-    vc.font = '4px monospace'; vc.textAlign = 'center'
-    vc.fillText('LV.' + (i + 1), x + w/2, y + 10)
-
-    vc.font = '3px monospace'
-    if (unlocked) {
-      // Wrap level name
-      const words = lvl.name.split(' ')
-      let line1 = words.slice(0, Math.ceil(words.length/2)).join(' ')
-      let line2 = words.slice(Math.ceil(words.length/2)).join(' ')
-      vc.fillText(line1, x + w/2, y + 18)
-      vc.fillText(line2, x + w/2, y + 24)
-      vc.fillStyle = C.YELLOW
-      vc.fillText('BEST: ' + save.highScores[i], x + w/2, y + 33)
+    if (!unlocked) {
+      vc.fillStyle = 'rgba(150,150,150,0.5)'; vc.font = '10px monospace'; vc.textAlign = 'center'
+      vc.fillText('?', bx + bw/2, by + bh/2 + 4)
     } else {
-      vc.fillStyle = C.GRAY; vc.fillText('LOCKED', x + w/2, y + 22)
+      vc.fillStyle = '#FF69B4'; vc.font = '5px monospace'; vc.textAlign = 'center'
+      vc.fillText('LV.' + lvl.id, bx + bw/2, by + 12)
+      vc.fillStyle = 'rgba(255,255,255,0.7)'; vc.font = '4px monospace'
+      const nameStr = lvl.name.length > 12 ? lvl.name.substring(0, 12) + '..' : lvl.name
+      vc.fillText(nameStr, bx + bw/2, by + 22)
+      if (hs > 0) { vc.fillStyle = '#F1C40F'; vc.fillText('BEST:' + hs, bx + bw/2, by + 32) }
+      drawButton(bx + 8, by + bh - 18, bw - 16, 12, 'PLAY', isHovered(bx + 8, by + bh - 18, bw - 16, 12), '#FF69B4')
+      registerButton(bx + 8, by + bh - 18, bw - 16, 12, () => { startLevel(i) })
     }
-
-    if (unlocked) registerButton(x, y, w, h, () => { startLevel(i) })
   })
 
-  const bw = 50, bh = 10, bx = VW/2 - bw/2, by = VH - 14
-  const hiBack = isHovered(bx, by, bw, bh)
-  drawButton(bx, by, bw, bh, 'BACK', hiBack, C.PURPLE)
-  registerButton(bx, by, bw, bh, () => { state = 'menu' })
+  drawButton(VW/2 - 30, VH - 14, 60, 10, 'BACK', isHovered(VW/2 - 30, VH - 14, 60, 10), '#9B59B6')
+  registerButton(VW/2 - 30, VH - 14, 60, 10, () => { state = 'menu' })
   vc.textAlign = 'left'
 }
 
 // --- PAUSE ---
 function renderPause() {
+  clearButtons()
   vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = 'rgba(26,10,46,0.4)'; vc.fillRect(0, 0, VW, VH)
 
-  vc.fillStyle = C.PINK; vc.font = 'bold 10px monospace'; vc.textAlign = 'center'
-  vc.fillText('PAUSED', VW / 2, VH / 2 - 32)
+  const pulse = 0.88 + 0.12 * Math.sin(menuTime * 4)
+  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 10
+  vc.fillStyle = '#FF69B4'; vc.font = Math.round(10 * pulse) + 'px monospace'; vc.textAlign = 'center'
+  vc.fillText('PAUSED', VW/2, 38)
+  vc.shadowBlur = 0
 
-  const bw = 70, bh = 11, bx = VW/2 - bw/2
+  const bw = 90, bh = 13, bx = VW/2 - bw/2
   const btns = [
-    { label: 'RESUME',  col: C.PINK,   action: () => { state = 'playing' } },
-    { label: 'SETTINGS',col: C.CYAN,   action: () => { state = 'settings' } },
-    { label: 'MENU',    col: C.PURPLE, action: () => { state = 'menu' } },
+    ['RESUME',   '#FF69B4', () => { state = 'playing' }],
+    ['SETTINGS', '#00FFFF', () => { prevState = 'paused'; state = 'settings' }],
+    ['RESTART',  '#2ECC71', () => { game = initGame(game ? game.level : 0); state = 'playing'; sfxConfirm() }],
+    ['MENU',     '#9B59B6', () => { state = 'menu' }],
   ]
   btns.forEach((b, i) => {
-    const by = VH / 2 - 18 + i * (bh + 4)
-    const hi = isHovered(bx, by, bw, bh)
-    drawButton(bx, by, bw, bh, b.label, hi, b.col)
-    registerButton(bx, by, bw, bh, b.action)
+    drawButton(bx, 52 + i * 18, bw, bh, b[0], isHovered(bx, 52 + i * 18, bw, bh), b[1])
+    registerButton(bx, 52 + i * 18, bw, bh, b[2])
   })
   vc.textAlign = 'left'
 }
@@ -1258,187 +1494,214 @@ function renderPause() {
 // --- GAME OVER ---
 function renderGameOver() {
   clearButtons()
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = '#0A0005'; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = 'rgba(200,0,0,0.2)'; vc.fillRect(0, 0, VW, VH)
 
-  // Glitchy red title
-  vc.fillStyle = '#FF0000'; vc.font = 'bold 12px monospace'; vc.textAlign = 'center'
-  vc.fillText('GROUNDED!', VW / 2, 30)
-  if (Math.random() < 0.1) {
-    vc.globalAlpha = 0.5; vc.fillText('GROUNDED!', VW / 2 + (Math.random()-0.5)*4, 30); vc.globalAlpha = 1
+  // Glitch effect
+  if (Math.random() > 0.6) {
+    vc.fillStyle = 'rgba(200,0,0,0.15)'
+    vc.fillRect(((Math.random() * VW) | 0) - 10, (Math.random() * VH) | 0, VW + 20, 3)
+  }
+  // Falling particles
+  vc.fillStyle = 'rgba(200,0,100,0.5)'
+  for (let i = 0; i < 8; i++) {
+    vc.fillRect(((i * 47 + menuTime * 15) % VW) | 0, ((menuTime * 30 + i * 23) % VH) | 0, 2, 2)
   }
 
-  if (game) {
-    vc.fillStyle = C.DPINK; vc.font = '5px monospace'
-    vc.fillText(game.deathReason, VW / 2, 44)
-    vc.fillStyle = C.YELLOW
-    vc.fillText('SCORE: ' + game.score, VW / 2, 56)
-    vc.fillStyle = C.LEMON
-    vc.fillText('COINS: +' + game.coins, VW / 2, 65)
-    vc.fillStyle = '#AAF'
-    vc.fillText('BEST: ' + save.highScores[game.level], VW / 2, 74)
-  }
+  // GAME OVER title
+  const gx = Math.random() > 0.9 ? (Math.random() - 0.5) * 4 : 0
+  vc.save()
+  vc.shadowColor = '#E74C3C'; vc.shadowBlur = 20
+  vc.fillStyle = '#E74C3C'; vc.font = '14px monospace'; vc.textAlign = 'center'
+  vc.fillText('GAME OVER', VW/2 + gx, 30)
+  vc.restore()
 
-  const bw = 70, bh = 11, bx = VW/2 - bw/2
-  const btns = [
-    { label: 'RETRY', col: C.PINK,   action: () => { if (game) startLevel(game.level) } },
-    { label: 'MENU',  col: C.PURPLE, action: () => { state = 'menu' } },
+  const msg = (game && game.deathReason) ? game.deathReason : 'GROUNDED!'
+  vc.fillStyle = '#9B59B6'; vc.font = '5px monospace'; vc.textAlign = 'center'
+  vc.fillText(msg, VW/2, 44)
+
+  // Stats box
+  vc.fillStyle = 'rgba(0,0,0,0.6)'; vc.fillRect(VW/2 - 50, 50, 100, 54)
+  vc.strokeStyle = 'rgba(150,0,255,0.5)'; vc.lineWidth = 0.5; vc.strokeRect(VW/2 - 50, 50, 100, 54)
+  const rows = [
+    ['SCORE', (game ? game.score : 0).toLocaleString(), '#00FFFF'],
+    ['BEST',  Math.max.apply(null, save.highScores).toLocaleString(), '#F1C40F'],
+    ['COINS', '+' + (game ? game.coins : 0), '#F1C40F'],
+    ['TIME',  ((game ? game.time : 0) | 0) + 's', '#FFF'],
   ]
-  btns.forEach((b, i) => {
-    const by = 88 + i * (bh + 4)
-    const hi = isHovered(bx, by, bw, bh)
-    drawButton(bx, by, bw, bh, b.label, hi, b.col)
-    registerButton(bx, by, bw, bh, b.action)
+  vc.font = '4px monospace'
+  rows.forEach((row, i) => {
+    vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.textAlign = 'left'; vc.fillText(row[0], VW/2 - 46, 62 + i * 11)
+    vc.fillStyle = row[2]; vc.textAlign = 'right'; vc.fillText(row[1], VW/2 + 46, 62 + i * 11)
   })
+
+  const bw = 80, bh = 12, bx = VW/2 - bw/2
+  drawButton(bx, 112, bw, bh, 'PLAY AGAIN', isHovered(bx, 112, bw, bh), '#FF69B4')
+  registerButton(bx, 112, bw, bh, () => { game = initGame(game ? game.level : 0); state = 'playing'; sfxConfirm() })
+  drawButton(bx, 128, bw, bh, 'MENU', isHovered(bx, 128, bw, bh), '#9B59B6')
+  registerButton(bx, 128, bw, bh, () => { state = 'menu' })
   vc.textAlign = 'left'
 }
 
 // --- WIN ---
 function renderWin() {
   clearButtons()
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
+  vc.fillStyle = '#0A1A0A'; vc.fillRect(0, 0, VW, VH)
 
-  vc.fillStyle = C.DGREEN; vc.font = 'bold 10px monospace'; vc.textAlign = 'center'
-  vc.fillText('ESCAPED!', VW / 2, 25)
-  vc.fillStyle = C.PINK; vc.font = '4px monospace'
-  vc.fillText('You glorious chaos pig!', VW / 2, 36)
-
-  if (game) {
-    vc.fillStyle = C.YELLOW; vc.font = '5px monospace'
-    vc.fillText('SCORE: ' + game.score, VW / 2, 50)
-    vc.fillStyle = C.LEMON
-    vc.fillText('COINS: +' + game.coins, VW / 2, 60)
-    vc.fillStyle = '#0F0'; vc.font = '4px monospace'
-    vc.fillText('NEW BEST: ' + save.highScores[game.level], VW / 2, 70)
+  // Confetti
+  const confettiCols = ['#FF69B4','#9B59B6','#00FFFF','#F1C40F','#2ECC71']
+  for (let i = 0; i < 20; i++) {
+    vc.fillStyle = confettiCols[(i + Math.floor(menuTime * 3)) % confettiCols.length]
+    vc.fillRect(((i * 31 + menuTime * 40) % VW) | 0, ((menuTime * 25 + i * 17) % VH) | 0, 3, 3)
   }
 
-  const bw = 70, bh = 11, bx = VW/2 - bw/2
-  const nextLvl = game ? game.level + 1 : -1
-  const btns = []
-  if (nextLvl < LEVELS.length && save.unlockedLevels[nextLvl]) {
-    btns.push({ label: 'NEXT LV', col: C.DGREEN, action: () => { startLevel(nextLvl) } })
-  }
-  btns.push({ label: 'MENU', col: C.PURPLE, action: () => { state = 'menu' } })
+  const pulse = 0.9 + 0.1 * Math.sin(menuTime * 5)
+  vc.save()
+  vc.shadowColor = '#2ECC71'; vc.shadowBlur = 15
+  vc.fillStyle = '#2ECC71'; vc.font = ((12 * pulse) | 0) + 'px monospace'; vc.textAlign = 'center'
+  vc.fillText('ESCAPED!', VW/2, 28)
+  vc.restore()
 
-  // Boss level special ending
+  vc.fillStyle = '#FF69B4'; vc.font = '5px monospace'; vc.textAlign = 'center'
+  vc.fillText((game && LEVELS[game.level]) ? LEVELS[game.level].name : '', VW/2, 40)
+
+  // Boss ending text
   if (game && game.level === 5 && game.bossDefeated) {
-    vc.fillStyle = C.CYAN; vc.font = '4px monospace'
     const ending = game.score > 1000 ? 'SECRET ENDING: VOID QUEEN!' : game.score > 500 ? 'GOOD ENDING: HERO PIG!' : 'BAD ENDING: JUST LUCKY'
-    vc.fillText(ending, VW / 2, 82)
+    vc.fillStyle = '#00FFFF'; vc.font = '4px monospace'; vc.fillText(ending, VW/2, 46)
   }
 
-  btns.forEach((b, i) => {
-    const by = 90 + i * (bh + 4)
-    const hi = isHovered(bx, by, bw, bh)
-    drawButton(bx, by, bw, bh, b.label, hi, b.col)
-    registerButton(bx, by, bw, bh, b.action)
+  // Stats box
+  vc.fillStyle = 'rgba(0,0,0,0.55)'; vc.fillRect(VW/2 - 50, 50, 100, 48)
+  vc.strokeStyle = 'rgba(46,204,113,0.5)'; vc.lineWidth = 0.5; vc.strokeRect(VW/2 - 50, 50, 100, 48)
+  const winRows = [
+    ['SCORE', (game ? game.score : 0).toLocaleString(), '#00FFFF'],
+    ['COINS', '+' + (game ? game.coins : 0), '#F1C40F'],
+    ['TIME',  ((game ? game.time : 0) | 0) + 's', '#FFF'],
+  ]
+  winRows.forEach((row, i) => {
+    vc.font = '4px monospace'; vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.textAlign = 'left'
+    vc.fillText(row[0], VW/2 - 46, 62 + i * 13)
+    vc.fillStyle = row[2]; vc.textAlign = 'right'; vc.fillText(row[1], VW/2 + 46, 62 + i * 13)
   })
+
+  const bw = 80, bx = VW/2 - bw/2
+  const nextLvl = game ? game.level + 1 : -1
+  if (nextLvl >= 0 && nextLvl < LEVELS.length && save.unlockedLevels[nextLvl]) {
+    drawButton(bx, 102, bw, 12, 'NEXT LEVEL', isHovered(bx, 102, bw, 12), '#2ECC71')
+    registerButton(bx, 102, bw, 12, () => { game = initGame(nextLvl); state = 'playing'; sfxConfirm() })
+    drawButton(bx, 118, bw, 12, 'MENU', isHovered(bx, 118, bw, 12), '#9B59B6')
+    registerButton(bx, 118, bw, 12, () => { state = 'menu' })
+  } else {
+    drawButton(bx, 102, bw, 12, 'PLAY AGAIN', isHovered(bx, 102, bw, 12), '#FF69B4')
+    registerButton(bx, 102, bw, 12, () => { game = initGame(game ? game.level : 0); state = 'playing'; sfxConfirm() })
+    drawButton(bx, 118, bw, 12, 'MENU', isHovered(bx, 118, bw, 12), '#9B59B6')
+    registerButton(bx, 118, bw, 12, () => { state = 'menu' })
+  }
   vc.textAlign = 'left'
 }
 
 // --- SETTINGS ---
 function renderSettings() {
   clearButtons()
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = C.CYAN; vc.font = 'bold 8px monospace'; vc.textAlign = 'center'
-  vc.fillText('SETTINGS', VW / 2, 14)
+  drawMenuBg()
+  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 8; vc.fillStyle = '#00FFFF'
+  vc.font = '8px monospace'; vc.textAlign = 'center'; vc.fillText('SETTINGS', VW/2, 18); vc.shadowBlur = 0
 
-  const panelX = 30, panelW = VW - 60
-
-  function drawSlider(label, val, setFn, y) {
-    vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'left'
-    vc.fillText(label, panelX, y - 1)
-    const slX = panelX, slW = panelW, slY = y + 2, slH = 6
-    vc.fillStyle = '#333'; vc.fillRect(slX, slY, slW, slH)
-    vc.fillStyle = C.CYAN; vc.fillRect(slX, slY, slW * val, slH)
-    vc.strokeStyle = '#FFF'; vc.lineWidth = 0.5; vc.strokeRect(slX, slY, slW, slH)
-    vc.fillStyle = '#FFF'; vc.textAlign = 'right'
-    vc.fillText(Math.round(val * 100) + '%', panelX + panelW, y - 1)
-    registerButton(slX, slY - 2, slW, slH + 4, (vx) => {
-      const rel = Math.max(0, Math.min(1, (vx - slX) / slW))
-      setFn(rel); writeSave()
+  const sliders = [['SFX VOL', 'sfxVol', 50], ['MUSIC VOL', 'musicVol', 80]]
+  sliders.forEach(function(s) {
+    const label = s[0], key = s[1], by = s[2]
+    vc.fillStyle = 'rgba(255,255,255,0.6)'; vc.font = '5px monospace'; vc.textAlign = 'left'
+    vc.fillText(label, 20, by)
+    const val = (save.settings[key] !== undefined) ? save.settings[key] : 0.5
+    const bw = 160, bx = 20
+    vc.fillStyle = 'rgba(0,0,0,0.4)'; vc.fillRect(bx, by + 4, bw, 6)
+    vc.strokeStyle = 'rgba(0,255,255,0.3)'; vc.lineWidth = 0.5; vc.strokeRect(bx, by + 4, bw, 6)
+    vc.fillStyle = '#00FFFF'; vc.fillRect(bx, by + 4, Math.round(bw * val), 6)
+    // Minus button
+    drawButton(bx + bw + 4, by + 2, 12, 10, '-', isHovered(bx + bw + 4, by + 2, 12, 10), '#E74C3C')
+    registerButton(bx + bw + 4, by + 2, 12, 10, () => {
+      save.settings[key] = Math.max(0, (save.settings[key] || 0) - 0.1); writeSave()
     })
-  }
+    // Plus button
+    drawButton(bx + bw + 18, by + 2, 12, 10, '+', isHovered(bx + bw + 18, by + 2, 12, 10), '#2ECC71')
+    registerButton(bx + bw + 18, by + 2, 12, 10, () => {
+      save.settings[key] = Math.min(1, (save.settings[key] || 0) + 0.1); writeSave()
+    })
+  })
 
-  drawSlider('SFX VOL',   save.settings.sfxVol,   v => { save.settings.sfxVol   = v }, 32)
-  drawSlider('MUSIC VOL', save.settings.musicVol,  v => { save.settings.musicVol = v }, 52)
-
-  const bw = 50, bh = 10, bx = VW/2 - bw/2, by = VH - 20
-  const hiBack = isHovered(bx, by, bw, bh)
-  drawButton(bx, by, bw, bh, 'BACK', hiBack, C.PURPLE)
-  registerButton(bx, by, bw, bh, () => { state = prevState || 'menu' })
+  drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
+  registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = prevState || 'menu' })
   vc.textAlign = 'left'
 }
 
 // --- SHOP ---
 function renderShop() {
   clearButtons()
-  vc.fillStyle = C.BLACK; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = C.PURPLE; vc.font = 'bold 8px monospace'; vc.textAlign = 'center'
-  vc.fillText('SHOP', VW / 2, 12)
-  vc.fillStyle = C.YELLOW; vc.font = '4px monospace'
-  vc.fillText('COINS: ' + save.coins, VW / 2, 21)
+  drawMenuBg()
+  vc.shadowColor = '#F1C40F'; vc.shadowBlur = 12
+  vc.fillStyle = '#F1C40F'; vc.font = '8px monospace'; vc.textAlign = 'center'
+  vc.fillText('SHOP', VW/2, 18)
+  vc.shadowBlur = 0
+  vc.fillStyle = '#F1C40F'; vc.font = '5px monospace'
+  vc.fillText('COINS: ' + save.coins.toLocaleString(), VW/2, 28)
 
   const skinList = Object.entries(SKINS)
-  const startY   = 28
-  const rowH     = 19
-  const panelX   = 8, panelW = VW - 16
+  const priceList = { default:0, beach:500, vampire:1000, robot:2000, ghost:3000, corrupted:5000 }
 
-  skinList.forEach(([id, skin], i) => {
-    const y       = startY + i * rowH
-    const owned   = save.unlockedSkins.includes(id)
-    const active  = save.activeSkin === id
-    const canBuy  = !owned && save.coins >= skin.cost
-    const hi      = isHovered(panelX, y, panelW, rowH - 2)
+  skinList.forEach(function(entry, i) {
+    const id = entry[0], sk = entry[1]
+    const col = Math.floor(i / 2), row = i % 2
+    const bx = 8 + col * (VW/2 - 6), by = 36 + row * 36, bw = VW/2 - 14, bh = 28
+    const owned = save.unlockedSkins.includes(id)
+    const active = save.activeSkin === id
+    const price = priceList[id] !== undefined ? priceList[id] : 999
 
-    vc.fillStyle   = active ? 'rgba(0,255,100,0.15)' : hi ? 'rgba(255,105,180,0.1)' : 'rgba(255,255,255,0.03)'
-    vc.fillRect(panelX, y, panelW, rowH - 2)
-    vc.strokeStyle = active ? C.DGREEN : owned ? 'rgba(255,255,255,0.3)' : C.GRAY
-    vc.lineWidth   = 0.5; vc.strokeRect(panelX, y, panelW, rowH - 2)
+    // Card background
+    vc.fillStyle = active ? 'rgba(255,105,180,0.25)' : owned ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.4)'
+    roundRect(vc, bx, by, bw, bh, 2); vc.fill()
+    vc.strokeStyle = active ? '#FF69B4' : owned ? 'rgba(255,255,255,0.3)' : 'rgba(100,100,100,0.4)'
+    vc.lineWidth = active ? 1.5 : 0.75; roundRect(vc, bx, by, bw, bh, 2); vc.stroke()
 
     // Color swatch
-    vc.fillStyle = skin.color; vc.fillRect(panelX + 3, y + 3, 10, 10)
+    vc.fillStyle = sk.color; vc.fillRect(bx + 3, by + 3, 10, 10)
+    vc.strokeStyle = 'rgba(255,255,255,0.3)'; vc.lineWidth = 0.5; vc.strokeRect(bx + 3, by + 3, 10, 10)
 
     // Name
-    vc.fillStyle = active ? C.DGREEN : '#FFF'
-    vc.font = '4px monospace'; vc.textAlign = 'left'
-    vc.fillText(skin.name, panelX + 17, y + 9)
+    vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'left'
+    vc.fillText(sk.name, bx + 16, by + 9)
 
-    // Button
-    const bw2 = 38, bh2 = 10, bx2 = panelX + panelW - bw2 - 3, by2 = y + 3
     if (active) {
-      drawButton(bx2, by2, bw2, bh2, 'EQUIPPED', false, C.DGREEN)
+      vc.fillStyle = '#2ECC71'; vc.fillText('EQUIPPED', bx + 16, by + 18)
     } else if (owned) {
-      const hiEq = isHovered(bx2, by2, bw2, bh2)
-      drawButton(bx2, by2, bw2, bh2, 'EQUIP', hiEq, C.DGREEN)
-      registerButton(bx2, by2, bw2, bh2, () => {
-        save.activeSkin = id; writeSave(); sfxConfirm()
-        if (game) game.skin = id
-      })
+      drawButton(bx + bw - 26, by + 3, 24, 10, 'EQUIP', isHovered(bx + bw - 26, by + 3, 24, 10), '#2ECC71')
+      registerButton(bx + bw - 26, by + 3, 24, 10, () => { save.activeSkin = id; writeSave(); sfxConfirm() })
     } else {
-      const hiBy = isHovered(bx2, by2, bw2, bh2)
-      drawButton(bx2, by2, bw2, bh2, skin.cost + 'c', hiBy && canBuy, canBuy ? C.YELLOW : C.GRAY)
-      if (canBuy) {
-        registerButton(bx2, by2, bw2, bh2, () => {
-          save.coins -= skin.cost; save.unlockedSkins.push(id); writeSave(); sfxConfirm()
+      vc.fillStyle = save.coins >= price ? '#F1C40F' : 'rgba(200,200,200,0.4)'
+      vc.fillText(price + ' C', bx + 16, by + 18)
+      if (save.coins >= price) {
+        drawButton(bx + bw - 24, by + 3, 22, 10, 'BUY', isHovered(bx + bw - 24, by + 3, 22, 10), '#F1C40F')
+        registerButton(bx + bw - 24, by + 3, 22, 10, () => {
+          save.coins -= price
+          save.unlockedSkins.push(id)
+          writeSave(); sfxCoin(); sfxConfirm()
         })
       }
     }
   })
 
-  const bw = 50, bh = 10, bx = VW/2 - bw/2, by = VH - 12
-  drawButton(bx, by, bw, bh, 'BACK', isHovered(bx, by, bw, bh), C.PINK)
-  registerButton(bx, by, bw, bh, () => { state = 'menu' })
+  drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
+  registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = 'menu' })
   vc.textAlign = 'left'
 }
 
 // ── 23. GAME FLOW ─────────────────────────────────────────────
 function startLevel(idx) {
   if (idx === undefined) idx = 0
-  getAC() // ensure audio context created on user gesture
+  getAC()
   game  = initGame(idx)
   state = 'playing'
   sfxConfirm()
-  // clear lingering particles
   particles.length = 0
   eventPopup = null
 }
@@ -1451,17 +1714,18 @@ function gameLoop(ts) {
   lastTime = ts
   menuTime += dt
 
+  updateBgParticles()
+
   vc.fillStyle = '#000'
   vc.fillRect(0, 0, VW, VH)
 
   if (state === 'playing') {
     update(dt)
     render()
-    // In-game action keys
     if (keys.space)    { if (game) doAction(game); keys.space = false }
     if (keys.interact) { if (game) doAction(game); keys.interact = false }
-    keys.jump = keys.up  // unify jump keys
-    drawScanlines()
+    keys.jump = keys.up
+    drawPostFX()
     if (game) {
       chaosEffect = game.chaos > 30 ? (game.chaos - 30) / 140 : 0
       if (chaosEffect > 0) drawGlitch()
@@ -1469,12 +1733,10 @@ function gameLoop(ts) {
   } else if (state === 'paused') {
     render()
     renderPause()
-    drawScanlines()
+    drawPostFX()
   } else if (state === 'menu') {
-    clearButtons()
     renderMenu()
   } else if (state === 'levelSelect') {
-    clearButtons()
     renderLevelSelect()
   } else if (state === 'gameover') {
     renderGameOver()
@@ -1484,6 +1746,8 @@ function gameLoop(ts) {
     renderShop()
   } else if (state === 'settings') {
     renderSettings()
+  } else if (state === 'howtoplay') {
+    renderHowToPlay()
   }
 
   blitToScreen()
