@@ -33,6 +33,22 @@ function blitToScreen() {
   ctx.drawImage(virtualCanvas, ox, oy, VW * scale, VH * scale)
 }
 
+let _menuScale = 1, _menuOX = 0, _menuOY = 0
+
+function beginMenuDraw() {
+  _menuScale = Math.min(canvas.width / VW, canvas.height / VH)
+  _menuOX    = (canvas.width  - VW * _menuScale) / 2
+  _menuOY    = (canvas.height - VH * _menuScale) / 2
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.save()
+  ctx.translate(_menuOX, _menuOY)
+  ctx.scale(_menuScale, _menuScale)
+}
+
+function endMenuDraw() {
+  ctx.restore()
+}
+
 const C = {
   PINK:'#FF69B4', DPINK:'#CC4490', PURPLE:'#9B59B6',
   CYAN:'#00FFFF', BLUE:'#87CEEB', DBLUE:'#4A90D9',
@@ -389,16 +405,16 @@ function updateBgParticles() {
 
 // ── SHARED ANIMATED MENU BG ──────────────────────────────────
 function drawMenuBg() {
-  vc.fillStyle = '#0A0A0F'; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = 'rgba(26,10,46,0.8)'; vc.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = '#0A0A0F'; ctx.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = 'rgba(26,10,46,0.8)'; ctx.fillRect(0, 0, VW, VH)
   const go = (menuTime * 20) % 12
-  vc.strokeStyle = 'rgba(0,255,255,0.10)'; vc.lineWidth = 0.5
-  for (let y = -go; y < VH; y += 12) { vc.beginPath(); vc.moveTo(0, y); vc.lineTo(VW, y); vc.stroke() }
-  for (let x = 0; x < VW; x += 20)  { vc.beginPath(); vc.moveTo(x, 0); vc.lineTo(x, VH); vc.stroke() }
+  ctx.strokeStyle = 'rgba(0,255,255,0.10)'; ctx.lineWidth = 0.5
+  for (let y = -go; y < VH; y += 12) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(VW, y); ctx.stroke() }
+  for (let x = 0; x < VW; x += 20)  { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, VH); ctx.stroke() }
   bgParticles.forEach(p => {
-    vc.fillStyle = p.c; vc.globalAlpha = 0.5
-    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
-    vc.globalAlpha = 1
+    ctx.fillStyle = p.c; ctx.globalAlpha = 0.5
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
+    ctx.globalAlpha = 1
   })
 }
 
@@ -1185,25 +1201,25 @@ function isHovered(x, y, w, h) {
 
 function drawButton(x, y, w, h, text, highlighted, color) {
   if (color === undefined) color = '#FF69B4'
-  const glow = highlighted ? 15 : 6
-  vc.save()
-  vc.shadowColor = color; vc.shadowBlur = glow
-  vc.fillStyle = hexAlpha(color, highlighted ? 0.35 : 0.18)
-  roundRect(vc, x, y, w, h, 3)
-  vc.fill()
-  vc.strokeStyle = color; vc.lineWidth = highlighted ? 1.5 : 1
-  roundRect(vc, x, y, w, h, 3)
-  vc.stroke()
-  vc.fillStyle = 'rgba(255,255,255,0.15)'
-  roundRect(vc, x, y, w, 2, 3)
-  vc.fill()
-  vc.shadowBlur = 4
-  vc.fillStyle = '#FFF'
-  vc.font = Math.min(6, h * 0.38) + 'px monospace'
-  vc.textAlign = 'center'; vc.textBaseline = 'middle'
-  vc.fillText(text, x + w/2, y + h/2)
-  vc.textBaseline = 'alphabetic'; vc.shadowBlur = 0
-  vc.restore()
+  const glow = highlighted ? 18 : 8
+  ctx.save()
+  ctx.shadowColor = color; ctx.shadowBlur = glow
+  ctx.fillStyle = hexAlpha(color, highlighted ? 0.35 : 0.18)
+  roundRect(ctx, x, y, w, h, 3)
+  ctx.fill()
+  ctx.strokeStyle = color; ctx.lineWidth = highlighted ? 1.5 : 1
+  roundRect(ctx, x, y, w, h, 3)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'
+  roundRect(ctx, x, y, w, 2, 3)
+  ctx.fill()
+  ctx.shadowBlur = 4
+  ctx.fillStyle = '#FFF'
+  ctx.font = Math.min(6, h * 0.38) + 'px monospace'
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  ctx.fillText(text, x + w/2, y + h/2)
+  ctx.textBaseline = 'alphabetic'; ctx.shadowBlur = 0
+  ctx.restore()
 }
 
 // Map real coords → virtual
@@ -1307,77 +1323,77 @@ function renderMenu() {
   clearButtons()
 
   // Background
-  vc.fillStyle = '#0A0A0F'; vc.fillRect(0, 0, VW, VH)
-  const bgGrad = vc.createLinearGradient(0, 0, 0, VH)
+  ctx.fillStyle = '#0A0A0F'; ctx.fillRect(0, 0, VW, VH)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, VH)
   bgGrad.addColorStop(0, '#0A0A0F')
   bgGrad.addColorStop(1, '#1A0A2E')
-  vc.fillStyle = bgGrad; vc.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, VW, VH)
 
   // Scrolling cyan grid
   const gridOff = (menuTime * 20) % 12
-  vc.strokeStyle = 'rgba(0,255,255,0.15)'; vc.lineWidth = 0.5
-  for (let y = -gridOff; y < VH; y += 12) { vc.beginPath(); vc.moveTo(0, y); vc.lineTo(VW, y); vc.stroke() }
-  for (let x = 0; x < VW; x += 20)        { vc.beginPath(); vc.moveTo(x, 0); vc.lineTo(x, VH); vc.stroke() }
+  ctx.strokeStyle = 'rgba(0,255,255,0.15)'; ctx.lineWidth = 0.5
+  for (let y = -gridOff; y < VH; y += 12) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(VW, y); ctx.stroke() }
+  for (let x = 0; x < VW; x += 20)        { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, VH); ctx.stroke() }
 
   // Starfield
-  vc.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
   ;[[12,8],[40,22],[80,6],[140,14],[190,5],[240,19],[290,9],[30,40],[100,35],[200,42],[260,30],[310,38],[55,55],[160,60],[280,55]].forEach(function(s, idx) {
     const twinkle = 0.3 + 0.4 * Math.sin(menuTime * 1.5 + idx * 0.8)
-    vc.globalAlpha = twinkle
-    vc.fillRect(s[0], s[1], 1, 1)
+    ctx.globalAlpha = twinkle
+    ctx.fillRect(s[0], s[1], 1, 1)
   })
-  vc.globalAlpha = 1
+  ctx.globalAlpha = 1
 
   // Ambient floating particles
   bgParticles.forEach(p => {
-    vc.fillStyle = p.c; vc.globalAlpha = 0.5
-    vc.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
-    vc.globalAlpha = 1
+    ctx.fillStyle = p.c; ctx.globalAlpha = 0.5
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2)
+    ctx.globalAlpha = 1
   })
 
   // Stats corners
-  vc.font = '5px monospace'
+  ctx.font = '5px monospace'
   const hiScore = save.highScores.reduce((a, b) => Math.max(a, b), 0)
-  vc.fillStyle = '#F1C40F'; vc.textAlign = 'left'
-  vc.fillText('HI ' + hiScore.toLocaleString(), 3, 8)
-  vc.textAlign = 'right'
-  vc.fillText('COINS ' + save.coins.toLocaleString(), VW - 3, 8)
+  ctx.fillStyle = '#F1C40F'; ctx.textAlign = 'left'
+  ctx.fillText('HI ' + hiScore.toLocaleString(), 3, 8)
+  ctx.textAlign = 'right'
+  ctx.fillText('COINS ' + save.coins.toLocaleString(), VW - 3, 8)
 
   // Title "PEPPA CHAOS"
   const titlePulse = 0.85 + 0.15 * Math.sin(menuTime * 3)
   const titleY = 35
 
   // PEPPA
-  vc.save()
-  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 12
-  vc.fillStyle = '#FF69B4'
-  vc.font = '14px monospace'; vc.textAlign = 'center'
-  vc.translate(VW/2, titleY)
-  vc.scale(titlePulse, titlePulse)
-  vc.fillText('PEPPA', 0, 0)
-  vc.restore()
+  ctx.save()
+  ctx.shadowColor = '#FF69B4'; ctx.shadowBlur = 20
+  ctx.fillStyle = '#FF69B4'
+  ctx.font = '14px monospace'; ctx.textAlign = 'center'
+  ctx.translate(VW/2, titleY)
+  ctx.scale(titlePulse, titlePulse)
+  ctx.fillText('PEPPA', 0, 0)
+  ctx.restore()
 
   // CHAOS with glitch
   const glitchOff = (Math.floor(menuTime * 2) % 2 === 0) ? 0 : (Math.random() > 0.7 ? (Math.random() - 0.5) * 3 : 0)
-  vc.save()
-  vc.shadowColor = '#9B59B6'; vc.shadowBlur = 12
-  vc.fillStyle = '#9B59B6'
-  vc.font = '14px monospace'; vc.textAlign = 'center'
-  vc.translate(VW/2 + glitchOff, titleY + 16)
-  vc.scale(titlePulse, titlePulse)
-  vc.fillText('CHAOS', 0, 0)
-  vc.restore()
+  ctx.save()
+  ctx.shadowColor = '#9B59B6'; ctx.shadowBlur = 20
+  ctx.fillStyle = '#9B59B6'
+  ctx.font = '14px monospace'; ctx.textAlign = 'center'
+  ctx.translate(VW/2 + glitchOff, titleY + 16)
+  ctx.scale(titlePulse, titlePulse)
+  ctx.fillText('CHAOS', 0, 0)
+  ctx.restore()
 
   // Subtitle
-  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 4
-  vc.fillStyle = '#00FFFF'; vc.font = '5px monospace'; vc.textAlign = 'center'
-  vc.fillText('2D PIXEL CHAOS', VW/2, titleY + 26)
-  vc.shadowBlur = 0
+  ctx.shadowColor = '#00FFFF'; ctx.shadowBlur = 4
+  ctx.fillStyle = '#00FFFF'; ctx.font = '5px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('2D PIXEL CHAOS', VW/2, titleY + 26)
+  ctx.shadowBlur = 0
 
   // Press start blink
   if (Math.floor(menuTime * 1.25) % 2 === 0) {
-    vc.fillStyle = '#FFFFFF'; vc.font = '6px monospace'; vc.textAlign = 'center'
-    vc.fillText('PRESS START', VW/2, titleY + 37)
+    ctx.fillStyle = '#FFFFFF'; ctx.font = '6px monospace'; ctx.textAlign = 'center'
+    ctx.fillText('PRESS START', VW/2, titleY + 37)
   }
 
   // Buttons
@@ -1397,15 +1413,15 @@ function renderMenu() {
     registerButton(bx, by, bw, bh, b.action)
   })
 
-  vc.textAlign = 'left'; vc.shadowBlur = 0
+  ctx.textAlign = 'left'; ctx.shadowBlur = 0
 }
 
 // --- HOW TO PLAY ---
 function renderHowToPlay() {
   clearButtons()
   drawMenuBg()
-  vc.fillStyle = '#2ECC71'; vc.font = '7px monospace'; vc.textAlign = 'center'
-  vc.fillText('HOW TO PLAY', VW/2, 16)
+  ctx.fillStyle = '#2ECC71'; ctx.font = '7px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('HOW TO PLAY', VW/2, 16)
   const lines = [
     ['MOVE', 'A/D or LEFT/RIGHT'],
     ['JUMP', 'W or UP'],
@@ -1413,27 +1429,27 @@ function renderHowToPlay() {
     ['PAUSE', 'ESC'],
   ]
   lines.forEach(function(pair, i) {
-    vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.font = '4px monospace'; vc.textAlign = 'left'
-    vc.fillText(pair[0], 20, 30 + i * 15)
-    vc.fillStyle = '#00FFFF'; vc.textAlign = 'right'; vc.fillText(pair[1], VW - 20, 30 + i * 15)
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '4px monospace'; ctx.textAlign = 'left'
+    ctx.fillText(pair[0], 20, 30 + i * 15)
+    ctx.fillStyle = '#00FFFF'; ctx.textAlign = 'right'; ctx.fillText(pair[1], VW - 20, 30 + i * 15)
   })
-  vc.fillStyle = 'rgba(255,255,255,0.4)'; vc.font = '4px monospace'; vc.textAlign = 'center'
-  vc.fillText('Break objects to fill CHAOS meter', VW/2, 92)
-  vc.fillText('Reach 90% to unlock EXIT', VW/2, 102)
-  vc.fillText('Escape before time runs out!', VW/2, 112)
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '4px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('Break objects to fill CHAOS meter', VW/2, 92)
+  ctx.fillText('Reach 90% to unlock EXIT', VW/2, 102)
+  ctx.fillText('Escape before time runs out!', VW/2, 112)
   drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
   registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = 'menu' })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- LEVEL SELECT ---
 function renderLevelSelect() {
   clearButtons()
   drawMenuBg()
-  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 10
-  vc.fillStyle = '#00FFFF'; vc.font = '8px monospace'; vc.textAlign = 'center'
-  vc.fillText('SELECT LEVEL', VW/2, 18)
-  vc.shadowBlur = 0
+  ctx.shadowColor = '#00FFFF'; ctx.shadowBlur = 10
+  ctx.fillStyle = '#00FFFF'; ctx.font = '8px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('SELECT LEVEL', VW/2, 18)
+  ctx.shadowBlur = 0
 
   LEVELS.forEach((lvl, i) => {
     const col = i % 3, row = Math.floor(i / 3)
@@ -1441,21 +1457,21 @@ function renderLevelSelect() {
     const unlocked = save.unlockedLevels[i]
     const hs = save.highScores[i]
 
-    vc.fillStyle = unlocked ? 'rgba(255,105,180,0.12)' : 'rgba(0,0,0,0.4)'
-    roundRect(vc, bx, by, bw, bh, 3); vc.fill()
-    vc.strokeStyle = unlocked ? 'rgba(255,105,180,0.5)' : 'rgba(80,80,80,0.4)'
-    vc.lineWidth = unlocked ? 1 : 0.5; roundRect(vc, bx, by, bw, bh, 3); vc.stroke()
+    ctx.fillStyle = unlocked ? 'rgba(255,105,180,0.12)' : 'rgba(0,0,0,0.4)'
+    roundRect(ctx, bx, by, bw, bh, 3); ctx.fill()
+    ctx.strokeStyle = unlocked ? 'rgba(255,105,180,0.5)' : 'rgba(80,80,80,0.4)'
+    ctx.lineWidth = unlocked ? 1 : 0.5; roundRect(ctx, bx, by, bw, bh, 3); ctx.stroke()
 
     if (!unlocked) {
-      vc.fillStyle = 'rgba(150,150,150,0.5)'; vc.font = '10px monospace'; vc.textAlign = 'center'
-      vc.fillText('?', bx + bw/2, by + bh/2 + 4)
+      ctx.fillStyle = 'rgba(150,150,150,0.5)'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
+      ctx.fillText('?', bx + bw/2, by + bh/2 + 4)
     } else {
-      vc.fillStyle = '#FF69B4'; vc.font = '5px monospace'; vc.textAlign = 'center'
-      vc.fillText('LV.' + lvl.id, bx + bw/2, by + 12)
-      vc.fillStyle = 'rgba(255,255,255,0.7)'; vc.font = '4px monospace'
+      ctx.fillStyle = '#FF69B4'; ctx.font = '5px monospace'; ctx.textAlign = 'center'
+      ctx.fillText('LV.' + lvl.id, bx + bw/2, by + 12)
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '4px monospace'
       const nameStr = lvl.name.length > 12 ? lvl.name.substring(0, 12) + '..' : lvl.name
-      vc.fillText(nameStr, bx + bw/2, by + 22)
-      if (hs > 0) { vc.fillStyle = '#F1C40F'; vc.fillText('BEST:' + hs, bx + bw/2, by + 32) }
+      ctx.fillText(nameStr, bx + bw/2, by + 22)
+      if (hs > 0) { ctx.fillStyle = '#F1C40F'; ctx.fillText('BEST:' + hs, bx + bw/2, by + 32) }
       drawButton(bx + 8, by + bh - 18, bw - 16, 12, 'PLAY', isHovered(bx + 8, by + bh - 18, bw - 16, 12), '#FF69B4')
       registerButton(bx + 8, by + bh - 18, bw - 16, 12, () => { startLevel(i) })
     }
@@ -1463,20 +1479,20 @@ function renderLevelSelect() {
 
   drawButton(VW/2 - 30, VH - 14, 60, 10, 'BACK', isHovered(VW/2 - 30, VH - 14, 60, 10), '#9B59B6')
   registerButton(VW/2 - 30, VH - 14, 60, 10, () => { state = 'menu' })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- PAUSE ---
 function renderPause() {
   clearButtons()
-  vc.fillStyle = 'rgba(0,0,0,0.7)'; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = 'rgba(26,10,46,0.4)'; vc.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = 'rgba(26,10,46,0.4)'; ctx.fillRect(0, 0, VW, VH)
 
   const pulse = 0.88 + 0.12 * Math.sin(menuTime * 4)
-  vc.shadowColor = '#FF69B4'; vc.shadowBlur = 10
-  vc.fillStyle = '#FF69B4'; vc.font = Math.round(10 * pulse) + 'px monospace'; vc.textAlign = 'center'
-  vc.fillText('PAUSED', VW/2, 38)
-  vc.shadowBlur = 0
+  ctx.shadowColor = '#FF69B4'; ctx.shadowBlur = 10
+  ctx.fillStyle = '#FF69B4'; ctx.font = Math.round(10 * pulse) + 'px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('PAUSED', VW/2, 38)
+  ctx.shadowBlur = 0
 
   const bw = 90, bh = 13, bx = VW/2 - bw/2
   const btns = [
@@ -1489,51 +1505,51 @@ function renderPause() {
     drawButton(bx, 52 + i * 18, bw, bh, b[0], isHovered(bx, 52 + i * 18, bw, bh), b[1])
     registerButton(bx, 52 + i * 18, bw, bh, b[2])
   })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- GAME OVER ---
 function renderGameOver() {
   clearButtons()
-  vc.fillStyle = '#0A0005'; vc.fillRect(0, 0, VW, VH)
-  vc.fillStyle = 'rgba(200,0,0,0.2)'; vc.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = '#0A0005'; ctx.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = 'rgba(200,0,0,0.2)'; ctx.fillRect(0, 0, VW, VH)
 
   // Glitch effect
   if (Math.random() > 0.6) {
-    vc.fillStyle = 'rgba(200,0,0,0.15)'
-    vc.fillRect(((Math.random() * VW) | 0) - 10, (Math.random() * VH) | 0, VW + 20, 3)
+    ctx.fillStyle = 'rgba(200,0,0,0.15)'
+    ctx.fillRect(((Math.random() * VW) | 0) - 10, (Math.random() * VH) | 0, VW + 20, 3)
   }
   // Falling particles
-  vc.fillStyle = 'rgba(200,0,100,0.5)'
+  ctx.fillStyle = 'rgba(200,0,100,0.5)'
   for (let i = 0; i < 8; i++) {
-    vc.fillRect(((i * 47 + menuTime * 15) % VW) | 0, ((menuTime * 30 + i * 23) % VH) | 0, 2, 2)
+    ctx.fillRect(((i * 47 + menuTime * 15) % VW) | 0, ((menuTime * 30 + i * 23) % VH) | 0, 2, 2)
   }
 
   // GAME OVER title
   const gx = Math.random() > 0.9 ? (Math.random() - 0.5) * 4 : 0
-  vc.save()
-  vc.shadowColor = '#E74C3C'; vc.shadowBlur = 20
-  vc.fillStyle = '#E74C3C'; vc.font = '14px monospace'; vc.textAlign = 'center'
-  vc.fillText('GAME OVER', VW/2 + gx, 30)
-  vc.restore()
+  ctx.save()
+  ctx.shadowColor = '#E74C3C'; ctx.shadowBlur = 20
+  ctx.fillStyle = '#E74C3C'; ctx.font = '14px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('GAME OVER', VW/2 + gx, 30)
+  ctx.restore()
 
   const msg = (game && game.deathReason) ? game.deathReason : 'GROUNDED!'
-  vc.fillStyle = '#9B59B6'; vc.font = '5px monospace'; vc.textAlign = 'center'
-  vc.fillText(msg, VW/2, 44)
+  ctx.fillStyle = '#9B59B6'; ctx.font = '5px monospace'; ctx.textAlign = 'center'
+  ctx.fillText(msg, VW/2, 44)
 
   // Stats box
-  vc.fillStyle = 'rgba(0,0,0,0.6)'; vc.fillRect(VW/2 - 50, 50, 100, 54)
-  vc.strokeStyle = 'rgba(150,0,255,0.5)'; vc.lineWidth = 0.5; vc.strokeRect(VW/2 - 50, 50, 100, 54)
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(VW/2 - 50, 50, 100, 54)
+  ctx.strokeStyle = 'rgba(150,0,255,0.5)'; ctx.lineWidth = 0.5; ctx.strokeRect(VW/2 - 50, 50, 100, 54)
   const rows = [
     ['SCORE', (game ? game.score : 0).toLocaleString(), '#00FFFF'],
     ['BEST',  Math.max.apply(null, save.highScores).toLocaleString(), '#F1C40F'],
     ['COINS', '+' + (game ? game.coins : 0), '#F1C40F'],
     ['TIME',  ((game ? game.time : 0) | 0) + 's', '#FFF'],
   ]
-  vc.font = '4px monospace'
+  ctx.font = '4px monospace'
   rows.forEach((row, i) => {
-    vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.textAlign = 'left'; vc.fillText(row[0], VW/2 - 46, 62 + i * 11)
-    vc.fillStyle = row[2]; vc.textAlign = 'right'; vc.fillText(row[1], VW/2 + 46, 62 + i * 11)
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.textAlign = 'left'; ctx.fillText(row[0], VW/2 - 46, 62 + i * 11)
+    ctx.fillStyle = row[2]; ctx.textAlign = 'right'; ctx.fillText(row[1], VW/2 + 46, 62 + i * 11)
   })
 
   const bw = 80, bh = 12, bx = VW/2 - bw/2
@@ -1541,49 +1557,49 @@ function renderGameOver() {
   registerButton(bx, 112, bw, bh, () => { game = initGame(game ? game.level : 0); state = 'playing'; sfxConfirm() })
   drawButton(bx, 128, bw, bh, 'MENU', isHovered(bx, 128, bw, bh), '#9B59B6')
   registerButton(bx, 128, bw, bh, () => { state = 'menu' })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- WIN ---
 function renderWin() {
   clearButtons()
-  vc.fillStyle = '#0A1A0A'; vc.fillRect(0, 0, VW, VH)
+  ctx.fillStyle = '#0A1A0A'; ctx.fillRect(0, 0, VW, VH)
 
   // Confetti
   const confettiCols = ['#FF69B4','#9B59B6','#00FFFF','#F1C40F','#2ECC71']
   for (let i = 0; i < 20; i++) {
-    vc.fillStyle = confettiCols[(i + Math.floor(menuTime * 3)) % confettiCols.length]
-    vc.fillRect(((i * 31 + menuTime * 40) % VW) | 0, ((menuTime * 25 + i * 17) % VH) | 0, 3, 3)
+    ctx.fillStyle = confettiCols[(i + Math.floor(menuTime * 3)) % confettiCols.length]
+    ctx.fillRect(((i * 31 + menuTime * 40) % VW) | 0, ((menuTime * 25 + i * 17) % VH) | 0, 3, 3)
   }
 
   const pulse = 0.9 + 0.1 * Math.sin(menuTime * 5)
-  vc.save()
-  vc.shadowColor = '#2ECC71'; vc.shadowBlur = 15
-  vc.fillStyle = '#2ECC71'; vc.font = ((12 * pulse) | 0) + 'px monospace'; vc.textAlign = 'center'
-  vc.fillText('ESCAPED!', VW/2, 28)
-  vc.restore()
+  ctx.save()
+  ctx.shadowColor = '#2ECC71'; ctx.shadowBlur = 15
+  ctx.fillStyle = '#2ECC71'; ctx.font = ((12 * pulse) | 0) + 'px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('ESCAPED!', VW/2, 28)
+  ctx.restore()
 
-  vc.fillStyle = '#FF69B4'; vc.font = '5px monospace'; vc.textAlign = 'center'
-  vc.fillText((game && LEVELS[game.level]) ? LEVELS[game.level].name : '', VW/2, 40)
+  ctx.fillStyle = '#FF69B4'; ctx.font = '5px monospace'; ctx.textAlign = 'center'
+  ctx.fillText((game && LEVELS[game.level]) ? LEVELS[game.level].name : '', VW/2, 40)
 
   // Boss ending text
   if (game && game.level === 5 && game.bossDefeated) {
     const ending = game.score > 1000 ? 'SECRET ENDING: VOID QUEEN!' : game.score > 500 ? 'GOOD ENDING: HERO PIG!' : 'BAD ENDING: JUST LUCKY'
-    vc.fillStyle = '#00FFFF'; vc.font = '4px monospace'; vc.fillText(ending, VW/2, 46)
+    ctx.fillStyle = '#00FFFF'; ctx.font = '4px monospace'; ctx.fillText(ending, VW/2, 46)
   }
 
   // Stats box
-  vc.fillStyle = 'rgba(0,0,0,0.55)'; vc.fillRect(VW/2 - 50, 50, 100, 48)
-  vc.strokeStyle = 'rgba(46,204,113,0.5)'; vc.lineWidth = 0.5; vc.strokeRect(VW/2 - 50, 50, 100, 48)
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(VW/2 - 50, 50, 100, 48)
+  ctx.strokeStyle = 'rgba(46,204,113,0.5)'; ctx.lineWidth = 0.5; ctx.strokeRect(VW/2 - 50, 50, 100, 48)
   const winRows = [
     ['SCORE', (game ? game.score : 0).toLocaleString(), '#00FFFF'],
     ['COINS', '+' + (game ? game.coins : 0), '#F1C40F'],
     ['TIME',  ((game ? game.time : 0) | 0) + 's', '#FFF'],
   ]
   winRows.forEach((row, i) => {
-    vc.font = '4px monospace'; vc.fillStyle = 'rgba(255,255,255,0.5)'; vc.textAlign = 'left'
-    vc.fillText(row[0], VW/2 - 46, 62 + i * 13)
-    vc.fillStyle = row[2]; vc.textAlign = 'right'; vc.fillText(row[1], VW/2 + 46, 62 + i * 13)
+    ctx.font = '4px monospace'; ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.textAlign = 'left'
+    ctx.fillText(row[0], VW/2 - 46, 62 + i * 13)
+    ctx.fillStyle = row[2]; ctx.textAlign = 'right'; ctx.fillText(row[1], VW/2 + 46, 62 + i * 13)
   })
 
   const bw = 80, bx = VW/2 - bw/2
@@ -1599,26 +1615,26 @@ function renderWin() {
     drawButton(bx, 118, bw, 12, 'MENU', isHovered(bx, 118, bw, 12), '#9B59B6')
     registerButton(bx, 118, bw, 12, () => { state = 'menu' })
   }
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- SETTINGS ---
 function renderSettings() {
   clearButtons()
   drawMenuBg()
-  vc.shadowColor = '#00FFFF'; vc.shadowBlur = 8; vc.fillStyle = '#00FFFF'
-  vc.font = '8px monospace'; vc.textAlign = 'center'; vc.fillText('SETTINGS', VW/2, 18); vc.shadowBlur = 0
+  ctx.shadowColor = '#00FFFF'; ctx.shadowBlur = 8; ctx.fillStyle = '#00FFFF'
+  ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.fillText('SETTINGS', VW/2, 18); ctx.shadowBlur = 0
 
   const sliders = [['SFX VOL', 'sfxVol', 50], ['MUSIC VOL', 'musicVol', 80]]
   sliders.forEach(function(s) {
     const label = s[0], key = s[1], by = s[2]
-    vc.fillStyle = 'rgba(255,255,255,0.6)'; vc.font = '5px monospace'; vc.textAlign = 'left'
-    vc.fillText(label, 20, by)
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '5px monospace'; ctx.textAlign = 'left'
+    ctx.fillText(label, 20, by)
     const val = (save.settings[key] !== undefined) ? save.settings[key] : 0.5
     const bw = 160, bx = 20
-    vc.fillStyle = 'rgba(0,0,0,0.4)'; vc.fillRect(bx, by + 4, bw, 6)
-    vc.strokeStyle = 'rgba(0,255,255,0.3)'; vc.lineWidth = 0.5; vc.strokeRect(bx, by + 4, bw, 6)
-    vc.fillStyle = '#00FFFF'; vc.fillRect(bx, by + 4, Math.round(bw * val), 6)
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by + 4, bw, 6)
+    ctx.strokeStyle = 'rgba(0,255,255,0.3)'; ctx.lineWidth = 0.5; ctx.strokeRect(bx, by + 4, bw, 6)
+    ctx.fillStyle = '#00FFFF'; ctx.fillRect(bx, by + 4, Math.round(bw * val), 6)
     // Minus button
     drawButton(bx + bw + 4, by + 2, 12, 10, '-', isHovered(bx + bw + 4, by + 2, 12, 10), '#E74C3C')
     registerButton(bx + bw + 4, by + 2, 12, 10, () => {
@@ -1633,19 +1649,19 @@ function renderSettings() {
 
   drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
   registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = prevState || 'menu' })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // --- SHOP ---
 function renderShop() {
   clearButtons()
   drawMenuBg()
-  vc.shadowColor = '#F1C40F'; vc.shadowBlur = 12
-  vc.fillStyle = '#F1C40F'; vc.font = '8px monospace'; vc.textAlign = 'center'
-  vc.fillText('SHOP', VW/2, 18)
-  vc.shadowBlur = 0
-  vc.fillStyle = '#F1C40F'; vc.font = '5px monospace'
-  vc.fillText('COINS: ' + save.coins.toLocaleString(), VW/2, 28)
+  ctx.shadowColor = '#F1C40F'; ctx.shadowBlur = 12
+  ctx.fillStyle = '#F1C40F'; ctx.font = '8px monospace'; ctx.textAlign = 'center'
+  ctx.fillText('SHOP', VW/2, 18)
+  ctx.shadowBlur = 0
+  ctx.fillStyle = '#F1C40F'; ctx.font = '5px monospace'
+  ctx.fillText('COINS: ' + save.coins.toLocaleString(), VW/2, 28)
 
   const skinList = Object.entries(SKINS)
   const priceList = { default:0, beach:500, vampire:1000, robot:2000, ghost:3000, corrupted:5000 }
@@ -1659,27 +1675,27 @@ function renderShop() {
     const price = priceList[id] !== undefined ? priceList[id] : 999
 
     // Card background
-    vc.fillStyle = active ? 'rgba(255,105,180,0.25)' : owned ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.4)'
-    roundRect(vc, bx, by, bw, bh, 2); vc.fill()
-    vc.strokeStyle = active ? '#FF69B4' : owned ? 'rgba(255,255,255,0.3)' : 'rgba(100,100,100,0.4)'
-    vc.lineWidth = active ? 1.5 : 0.75; roundRect(vc, bx, by, bw, bh, 2); vc.stroke()
+    ctx.fillStyle = active ? 'rgba(255,105,180,0.25)' : owned ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.4)'
+    roundRect(ctx, bx, by, bw, bh, 2); ctx.fill()
+    ctx.strokeStyle = active ? '#FF69B4' : owned ? 'rgba(255,255,255,0.3)' : 'rgba(100,100,100,0.4)'
+    ctx.lineWidth = active ? 1.5 : 0.75; roundRect(ctx, bx, by, bw, bh, 2); ctx.stroke()
 
     // Color swatch
-    vc.fillStyle = sk.color; vc.fillRect(bx + 3, by + 3, 10, 10)
-    vc.strokeStyle = 'rgba(255,255,255,0.3)'; vc.lineWidth = 0.5; vc.strokeRect(bx + 3, by + 3, 10, 10)
+    ctx.fillStyle = sk.color; ctx.fillRect(bx + 3, by + 3, 10, 10)
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.5; ctx.strokeRect(bx + 3, by + 3, 10, 10)
 
     // Name
-    vc.fillStyle = '#FFF'; vc.font = '4px monospace'; vc.textAlign = 'left'
-    vc.fillText(sk.name, bx + 16, by + 9)
+    ctx.fillStyle = '#FFF'; ctx.font = '4px monospace'; ctx.textAlign = 'left'
+    ctx.fillText(sk.name, bx + 16, by + 9)
 
     if (active) {
-      vc.fillStyle = '#2ECC71'; vc.fillText('EQUIPPED', bx + 16, by + 18)
+      ctx.fillStyle = '#2ECC71'; ctx.fillText('EQUIPPED', bx + 16, by + 18)
     } else if (owned) {
       drawButton(bx + bw - 26, by + 3, 24, 10, 'EQUIP', isHovered(bx + bw - 26, by + 3, 24, 10), '#2ECC71')
       registerButton(bx + bw - 26, by + 3, 24, 10, () => { save.activeSkin = id; writeSave(); sfxConfirm() })
     } else {
-      vc.fillStyle = save.coins >= price ? '#F1C40F' : 'rgba(200,200,200,0.4)'
-      vc.fillText(price + ' C', bx + 16, by + 18)
+      ctx.fillStyle = save.coins >= price ? '#F1C40F' : 'rgba(200,200,200,0.4)'
+      ctx.fillText(price + ' C', bx + 16, by + 18)
       if (save.coins >= price) {
         drawButton(bx + bw - 24, by + 3, 22, 10, 'BUY', isHovered(bx + bw - 24, by + 3, 22, 10), '#F1C40F')
         registerButton(bx + bw - 24, by + 3, 22, 10, () => {
@@ -1693,7 +1709,7 @@ function renderShop() {
 
   drawButton(VW/2 - 30, VH - 18, 60, 12, 'BACK', isHovered(VW/2 - 30, VH - 18, 60, 12), '#9B59B6')
   registerButton(VW/2 - 30, VH - 18, 60, 12, () => { state = 'menu' })
-  vc.textAlign = 'left'
+  ctx.textAlign = 'left'
 }
 
 // ── 23. GAME FLOW ─────────────────────────────────────────────
@@ -1715,12 +1731,9 @@ function gameLoop(ts) {
   lastTime = ts
   menuTime += dt
 
-  updateBgParticles()
-
-  vc.fillStyle = '#000'
-  vc.fillRect(0, 0, VW, VH)
-
   if (state === 'playing') {
+    // Clear and render game world to virtual canvas, then blit to screen
+    vc.fillStyle = '#000'; vc.fillRect(0, 0, VW, VH)
     update(dt)
     render()
     if (keys.space)    { if (game) doAction(game); keys.space = false }
@@ -1731,27 +1744,30 @@ function gameLoop(ts) {
       chaosEffect = game.chaos > 30 ? (game.chaos - 30) / 140 : 0
       if (chaosEffect > 0) drawGlitch()
     }
+    updateBgParticles()
+    blitToScreen()
   } else if (state === 'paused') {
+    // Game world on vc, pause overlay on ctx at native resolution
+    vc.fillStyle = '#000'; vc.fillRect(0, 0, VW, VH)
     render()
+    blitToScreen()
+    beginMenuDraw()
     renderPause()
-    drawPostFX()
-  } else if (state === 'menu') {
-    renderMenu()
-  } else if (state === 'levelSelect') {
-    renderLevelSelect()
-  } else if (state === 'gameover') {
-    renderGameOver()
-  } else if (state === 'win') {
-    renderWin()
-  } else if (state === 'shop') {
-    renderShop()
-  } else if (state === 'settings') {
-    renderSettings()
-  } else if (state === 'howtoplay') {
-    renderHowToPlay()
+    endMenuDraw()
+  } else {
+    // All other states: menus draw directly to ctx at native resolution
+    updateBgParticles()
+    beginMenuDraw()
+    if      (state === 'menu')        renderMenu()
+    else if (state === 'levelSelect') renderLevelSelect()
+    else if (state === 'gameover')    renderGameOver()
+    else if (state === 'win')         renderWin()
+    else if (state === 'shop')        renderShop()
+    else if (state === 'settings')    renderSettings()
+    else if (state === 'howtoplay')   renderHowToPlay()
+    endMenuDraw()
   }
 
-  blitToScreen()
   requestAnimationFrame(gameLoop)
 }
 
